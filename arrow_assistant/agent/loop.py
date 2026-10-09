@@ -56,6 +56,7 @@ class AgentLoop:
                  panic: PanicSwitch | None = None,
                  activity: ActivityMonitor | None = None,
                  risk: Callable[[RiskContext], Assessment] = assess_permissive,
+                 sensitive: Callable[[str, str], bool] = lambda app, title: False,
                  store: StateStore | None = None,
                  config: LoopConfig | None = None,
                  sleep: Callable[[float], None] = time.sleep):
@@ -68,6 +69,7 @@ class AgentLoop:
         self.panic = panic or PanicSwitch()
         self.activity = activity
         self.risk = risk
+        self.sensitive = sensitive
         self.store = store
         self.cfg = config or LoopConfig()
         self._sleep = sleep
@@ -121,6 +123,8 @@ class AgentLoop:
         cfg = self.cfg
         self.panic.check()
         obs = self._observe()
+        if self.sensitive(obs.app, obs.title):
+            return self._sensitive_result(state, obs)
         if cfg.use_plan and not state.plan:
             state.plan = self.planner.make_plan(state.task, self._ctx(obs))
         if cfg.mode == "task" and not state.plan_approved:
@@ -141,6 +145,8 @@ class AgentLoop:
             self.panic.check()
             if obs is None:
                 obs = self._observe()
+            if self.sensitive(obs.app, obs.title):
+                return self._sensitive_result(state, obs)
             action, comp = self.planner.next_action(
                 state.task, state.plan, state.history, self._ctx(obs))
             self.panic.check()
@@ -269,6 +275,13 @@ class AgentLoop:
         return AgentResult("step_limit",
                            f"Umabot na sa {state.max_steps} steps. Sabihin mo 'ituloy' para dagdagan.",
                            state.step, True)
+
+    def _sensitive_result(self, state, obs) -> AgentResult:
+        # The screenshot is never sent to a model while this window is up.
+        msg = (f"Nakabukas ang sensitive na window ('{obs.title[:40] or obs.app}'). "
+               "Hindi ko titingnan o gagalawin yan. Isara mo muna, tapos ituloy natin.")
+        self.log.note(f"sensitive window in foreground: {obs.app} / {obs.title[:40]}")
+        return AgentResult("blocked", msg, state.step, True)
 
     # -- helpers ------------------------------------------------------------------------
     def _resolve(self, action: Action, obs: Observation):
