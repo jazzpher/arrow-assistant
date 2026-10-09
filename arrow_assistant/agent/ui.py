@@ -12,6 +12,7 @@ class AgentUI(Protocol):
     def preview(self, pt: Point | None, label: str) -> None: ...
     def say(self, text: str) -> None: ...
     def finished(self, status: str, message: str) -> None: ...
+    def hud_rects(self) -> list: ...
 
 
 class NullUI:
@@ -20,6 +21,7 @@ class NullUI:
     def preview(self, pt, label): pass
     def say(self, text): pass
     def finished(self, status, message): pass
+    def hud_rects(self): return []
 
 
 class RecordingUI:
@@ -33,6 +35,7 @@ class RecordingUI:
     def preview(self, pt, label): self.events.append(("preview", pt, label))
     def say(self, text): self.events.append(("say", text))
     def finished(self, status, message): self.events.append(("finished", status, message))
+    def hud_rects(self): return list(getattr(self, 'rects', []))
 
     def kinds(self) -> list[str]:
         return [e[0] for e in self.events]
@@ -47,3 +50,4 @@ class ConsoleUI:
     def preview(self, pt, label): self._out(f"[arrow]   target {pt} {label}")
     def say(self, text): self._out(f"[arrow] {text}")
     def finished(self, status, message): self._out(f"[arrow] {status.upper()}: {message}")
+    def hud_rects(self): return []
