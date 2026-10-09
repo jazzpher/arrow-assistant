@@ -89,3 +89,57 @@ def select_stt() -> str:
 
 def hotkey() -> str:
     return os.environ.get("ARROW_HOTKEY", DEFAULT_HOTKEY).lower()
+
+
+# -- agent mode -------------------------------------------------------------
+AGENT_MODES = ("step", "task", "auto")
+
+
+def agent_hotkey() -> str:
+    return os.environ.get("ARROW_AGENT_HOTKEY", "ctrl+alt+a").lower()
+
+
+def panic_hotkey() -> str:
+    return os.environ.get("ARROW_PANIC_HOTKEY", "ctrl+alt+esc").lower()
+
+
+def agent_mode() -> str:
+    """step (confirm every action, default) | task | auto."""
+    m = os.environ.get("ARROW_AGENT_MODE", "step").lower()
+    return m if m in AGENT_MODES else "step"
+
+
+def agent_max_steps() -> int:
+    try:
+        n = int(os.environ.get("ARROW_AGENT_MAX_STEPS", "25"))
+    except ValueError:
+        n = 25
+    return max(1, min(n, 200))
+
+
+AGENT_GEMINI_MODEL = os.environ.get("ARROW_AGENT_GEMINI_MODEL", "gemini-2.5-flash")
+AGENT_OPENROUTER_MODEL = os.environ.get(
+    "ARROW_AGENT_OPENROUTER_MODEL", "google/gemini-2.0-flash-exp:free")
+AGENT_NVIDIA_MODEL = os.environ.get(
+    "ARROW_AGENT_NVIDIA_MODEL", "meta/llama-3.2-90b-vision-instruct")
+
+
+def select_agent_providers() -> list[LLMProvider]:
+    """Every configured vision provider, best planner first.
+
+    The agent loop makes one call per step, so it needs a fallback chain:
+    when one free tier runs out, the next provider takes over.
+    """
+    out: list[LLMProvider] = []
+    key = get_key("GEMINI_API_KEY")
+    if key:
+        out.append(LLMProvider("gemini", key, AGENT_GEMINI_MODEL))
+    key = get_key("NVIDIA_API_KEY")
+    if key:
+        out.append(LLMProvider("nvidia", key, AGENT_NVIDIA_MODEL,
+                               base_url="https://integrate.api.nvidia.com/v1"))
+    key = get_key("OPENROUTER_API_KEY")
+    if key:
+        out.append(LLMProvider("openrouter", key, AGENT_OPENROUTER_MODEL,
+                               base_url="https://openrouter.ai/api/v1"))
+    return out
