@@ -65,6 +65,10 @@ class AgentStack:
         if not self.ready():
             self.ui.say("Walang API key para sa agent. Ilagay ang GEMINI_API_KEY sa .env.")
             return False
+        from . import privacy
+        if not privacy.acknowledged():
+            self.ui.say(privacy.NOTICE + " Run: python -m arrow_assistant.agent.privacy")
+            return False
         ok = self.controller.start(task, resume=resume)
         if not ok:
             self.ui.say("May tumatakbo pang task (o walang naka-save na ipagpapatuloy).")

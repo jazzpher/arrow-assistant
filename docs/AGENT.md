@@ -22,6 +22,19 @@ It is separate, opt-in, and asks before it acts.
 Limits: `ARROW_AGENT_MAX_STEPS` (default 25; say "Arrow agent ituloy" to continue).
 `ARROW_AGENT_SCOPE=excel.exe,chrome.exe` makes any action outside those apps ask first.
 
+## Privacy (read before the first run)
+
+Every step sends a **screenshot of your screen to a cloud AI provider** (Gemini, NVIDIA, OpenRouter).
+Free tiers may use what you send to improve their products (Gemini free tier: "Used to improve our
+products: Yes"; NVIDIA free trial logs inputs). So screenshots are **not private**.
+Blocking password/OTP/card fields and sensitive windows is **not** full screenshot privacy: chats,
+emails, documents and notifications that are visible still get uploaded.
+
+- First run shows this notice and needs a YES (`python -m arrow_assistant.agent.privacy`); the app refuses tasks until accepted.
+- Close private windows/tabs before starting. Prefer `ARROW_AGENT_SCOPE=notepad.exe,excel.exe` (app allowlist) or `--scope` on the console.
+- The first `--live` selftest runs on Notepad only (scope-limited) and asks you to close everything else. Do your first tests on synthetic, non-sensitive content.
+- `--dry-run` still sends screenshots to the model; it only skips clicking.
+
 ## Safety (enforced in code, not just in the prompt)
 
 - **Always asks** (any mode): send/post/reply, pay/buy/checkout, delete/remove/format, install/uninstall,

@@ -104,12 +104,17 @@ def main(argv: list[str] | None = None) -> int:
         from . import bench
         bench.main(["--out", str(out_dir / "bench")])
     if args.live:
+        from . import privacy
+        print("\nLIVE test: screenshots of your screen go to the cloud model. "
+              "Close every private window/tab first; only Notepad should be visible.")
+        if not privacy.ensure_console():
+            return 3
         import subprocess
         subprocess.Popen(["notepad.exe"])
         time.sleep(1.5)
         from . import __main__ as cli
         return cli.main(["open notepad is already open: click in the text area and type: hello from Arrow",
-                         "--mode", "step", "--max-steps", "8"])
+                         "--mode", "step", "--max-steps", "8", "--scope", "notepad.exe"])
     print(f"\nSaved to {out_dir / 'selftest.md'}. Send that file back.")
     return 0 if all(ok for _, ok, _ in checks) else 1
 

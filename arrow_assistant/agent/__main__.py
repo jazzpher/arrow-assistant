@@ -32,12 +32,17 @@ def main(argv: list[str] | None = None) -> int:
                     help="plan and preview only; never touches mouse/keyboard")
     ap.add_argument("--yes", action="store_true",
                     help="with --dry-run only: auto-approve previews")
+    ap.add_argument("--scope", default=config.get_key("ARROW_AGENT_SCOPE") or "",
+                    help="comma list of allowed apps (exe names); other apps always ask")
     ap.add_argument("--resume", action="store_true", help="continue the saved task")
     args = ap.parse_args(argv)
     if not args.task and not args.resume:
         ap.error("give a task, or --resume")
     if args.yes and not args.dry_run:
         ap.error("--yes is only allowed together with --dry-run")
+    from . import privacy
+    if not args.dry_run and not privacy.ensure_console():
+        return 3
     providers = config.select_agent_providers()
     if not providers:
         print("No API key. Put GEMINI_API_KEY in .env", file=sys.stderr)
@@ -62,7 +67,8 @@ def main(argv: list[str] | None = None) -> int:
         AutoApprover() if args.yes else ConsoleApprover(), ui=ConsoleUI(),
         log=ActionLog(), panic=panic, activity=ActivityMonitor(screen.cursor),
         risk=assess, sensitive=is_sensitive_window, store=store,
-        config=LoopConfig(max_steps=args.max_steps, mode=args.mode))
+        config=LoopConfig(max_steps=args.max_steps, mode=args.mode,
+                           scope_apps=frozenset(a.strip().lower() for a in args.scope.split(",") if a.strip())))
     resume = store.load() if args.resume else None
     if args.resume and resume is None:
         print("Nothing to resume.")
