@@ -65,8 +65,21 @@ def token_from_pynput(key) -> str | None:
                 name = name[: -len(side)]
                 break
         return _CANON.get(name, name)
-    if hasattr(key, "char") and key.char:
-        return _CANON.get(key.char.lower(), key.char.lower())
+    return token_from_char_vk(getattr(key, "char", None), getattr(key, "vk", None))
+
+
+def token_from_char_vk(char: str | None, vk: int | None) -> str | None:
+    """Letter/digit token from a key event.
+
+    With Ctrl held, Windows reports letters as control characters
+    (Ctrl+A -> '\\x01'), so fall back to the virtual-key code.
+    """
+    if char and ord(char[0]) >= 32:
+        c = char.lower()
+        return _CANON.get(c, c)
+    if vk is not None:
+        if 65 <= vk <= 90 or 48 <= vk <= 57:
+            return chr(vk).lower()
     return None
 
 
