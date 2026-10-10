@@ -32,6 +32,7 @@ def test_gemini_contents_shape():
 
 
 class _FakeResp:
+    status_code = 200
     def __init__(self, lines):
         self._lines = lines
 
@@ -72,3 +73,58 @@ def test_openai_stream_parses_sse(monkeypatch):
     p = LLMProvider("openrouter", "key", "m", base_url="https://x/v1")
     out = "".join(ai.stream_answer(p, "q", "app", "", None, None))
     assert out == "Press F1. Done."
+
+
+class _KeyResp:
+    def __init__(self, status=200, lines=()):
+        self.status_code = status
+        self._lines = list(lines)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def raise_for_status(self):  # real requests would embed the full URL
+        raise AssertionError("raise_for_status must not be used")
+
+    def iter_lines(self, decode_unicode=True):
+        return iter(self._lines)
+
+
+def test_gemini_key_in_header_not_url(monkeypatch):
+    seen = {}
+
+    def fake_post(url, **kw):
+        seen["url"], seen["headers"] = url, kw.get("headers", {})
+        return _KeyResp(200, ['data: {"candidates":[{"content":{"parts":[{"text":"hi"}]}}]}'])
+
+    monkeypatch.setattr(ai.requests, "post", fake_post)
+    prov = LLMProvider("gemini", "SECRET123", "gemini-x")
+    out = list(ai.stream_answer(prov, "q", "app", "", None, None))
+    assert out == ["hi"]
+    assert "SECRET123" not in seen["url"] and "key=" not in seen["url"]
+    assert seen["headers"]["x-goog-api-key"] == "SECRET123"
+
+
+def test_http_error_message_has_no_key(monkeypatch):
+    monkeypatch.setattr(ai.requests, "post", lambda url, **kw: _KeyResp(429))
+    prov = LLMProvider("gemini", "SECRET123", "gemini-x")
+    try:
+        list(ai.stream_answer(prov, "q", "app", "", None, None))
+    except Exception as exc:
+        assert "SECRET123" not in str(exc) and "429" in str(exc)
+    else:
+        raise AssertionError("expected an error")
+
+
+def test_openai_compat_error_has_no_key(monkeypatch):
+    monkeypatch.setattr(ai.requests, "post", lambda url, **kw: _KeyResp(500))
+    prov = LLMProvider("nvidia", "SECRET123", "m", base_url="https://x/v1")
+    try:
+        list(ai.stream_answer(prov, "q", "app", "", None, None))
+    except Exception as exc:
+        assert "SECRET123" not in str(exc)
+    else:
+        raise AssertionError("expected an error")
