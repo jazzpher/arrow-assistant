@@ -73,6 +73,7 @@ class AgentLoop:
         self.store = store
         self.cfg = config or LoopConfig()
         self._sleep = sleep
+        self._focus_el = None   # element last clicked: the likely target of typing
 
     # -- public --------------------------------------------------------------
     def run(self, task: str, resume: TaskState | None = None) -> AgentResult:
@@ -194,9 +195,13 @@ class AgentLoop:
                 continue
 
             # ---- risk gate ------------------------------------------------------------
+            target_el = obs.element_at(pt) if pt else None
+            pw = bool(target_el and target_el.password)
+            if action.kind == "type" and self._focus_el is not None:
+                pw = pw or self._focus_el.password
+                label = f"{label} {self._focus_el.name}".strip()
             ctx = RiskContext(action, obs.app, obs.title, label, state.task, pt,
-                              cfg.scope_apps, self.ui.hud_rects(),
-                              bool(pt and (e := obs.element_at(pt)) and e.password))
+                              cfg.scope_apps, self.ui.hud_rects(), pw)
             assess = self.risk(ctx)
             if assess.blocked:
                 why = "; ".join(assess.reasons)
@@ -249,6 +254,8 @@ class AgentLoop:
 
             # ---- act ---------------------------------------------------------------------------
             end_pt = self.executor.perform(action, pt, pt2)
+            if action.kind in POINTER_KINDS:
+                self._focus_el = target_el
             if self.activity:
                 self.activity.expect(end_pt or (self.screen.cursor() if hasattr(self.screen, "cursor") else None))
             self._sleep(cfg.settle_s)
