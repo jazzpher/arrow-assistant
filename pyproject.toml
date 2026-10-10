@@ -1,3 +1,36 @@
+[project]
+name = "arrow-assistant"
+version = "0.1.0"
+description = "Voice-driven, screen-aware AI buddy for Windows (free-tier APIs)"
+requires-python = ">=3.10"
+dependencies = [
+    "PyQt6>=6.7.0",
+    "pynput>=1.7.7",
+    "mss>=9.0.1",
+    "requests>=2.31.0",
+    "Pillow>=10.4.0",
+    "numpy>=1.26.0",
+    "sounddevice>=0.5.0",
+    "python-dotenv>=1.0.1",
+    "keyring>=25.0",
+    "edge-tts>=7.0.0",
+    "miniaudio>=1.60",
+]
+
+[project.optional-dependencies]
+local = ["faster-whisper>=1.2.0", "pyttsx3>=2.90"]
+dev = ["pytest>=8.3.0", "pytest-mock>=3.14.0"]
+
+[project.scripts]
+arrow = "arrow_assistant.__main__:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["arrow_assistant*"]
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]

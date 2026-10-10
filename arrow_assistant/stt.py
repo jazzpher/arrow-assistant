@@ -13,6 +13,7 @@ import wave
 import numpy as np
 
 SAMPLE_RATE = 16_000
+MIN_PRESS_SECONDS = 0.3   # shorter taps are accidents; never sent to STT
 
 
 class MicRecorder:
@@ -44,6 +45,8 @@ class MicRecorder:
         if not chunks:
             return b""
         pcm = np.concatenate(chunks, axis=0)
+        if len(pcm) < self.sample_rate * MIN_PRESS_SECONDS:
+            return b""
         buf = io.BytesIO()
         with wave.open(buf, "wb") as wf:
             wf.setnchannels(1)
@@ -74,8 +77,21 @@ def _transcribe_groq(wav_bytes: bytes, api_key: str | None) -> str:
     return resp.text.strip()
 
 
+_whisper_model = None
+_whisper_lock = threading.Lock()
+
+
+def _get_whisper():
+    """Load the local model once and reuse it (loading is the slow part)."""
+    global _whisper_model
+    with _whisper_lock:
+        if _whisper_model is None:
+            from faster_whisper import WhisperModel  # lazy: heavy import
+            _whisper_model = WhisperModel("tiny", device="cpu", compute_type="int8")
+        return _whisper_model
+
+
 def _transcribe_local(wav_bytes: bytes) -> str:
-    from faster_whisper import WhisperModel  # lazy: heavy import
-    model = WhisperModel("tiny", device="cpu", compute_type="int8")
+    model = _get_whisper()
     segments, _ = model.transcribe(io.BytesIO(wav_bytes))
     return " ".join(seg.text.strip() for seg in segments).strip()

@@ -47,17 +47,31 @@ def capture_all_screens() -> list[tuple[dict, Image.Image]]:
     return shots
 
 
-def primary_shot() -> tuple[dict, Image.Image]:
-    """Capture the monitor containing the cursor (what the user sees)."""
-    shots = capture_all_screens()
-    if len(shots) == 1:
-        return shots[0]
-    x, y = cursor_position()
-    for mon, img in shots:
+def grab_monitor(mon: dict) -> Image.Image:
+    import mss
+    with mss.mss() as sct:
+        raw = sct.grab(mon)
+        return Image.frombytes("RGB", raw.size, raw.bgra, "raw", "BGRX")
+
+
+def pick_monitor(monitors: list[dict], x: int, y: int) -> dict:
+    """The monitor containing (x, y), else the first one. Pure."""
+    for mon in monitors:
         if mon["left"] <= x < mon["left"] + mon["width"] and \
            mon["top"] <= y < mon["top"] + mon["height"]:
-            return mon, img
-    return shots[0]
+            return mon
+    return monitors[0]
+
+
+def primary_shot() -> tuple[dict, Image.Image]:
+    """Capture only the monitor containing the cursor (what the user sees)."""
+    monitors = list_monitors()
+    if len(monitors) == 1:
+        mon = monitors[0]
+    else:
+        x, y = cursor_position()
+        mon = pick_monitor(monitors, x, y)
+    return mon, grab_monitor(mon)
 
 
 def cursor_position() -> tuple[int, int]:
@@ -79,6 +93,13 @@ def encode_for_model(img: Image.Image, max_edge: int = MAX_EDGE) -> str:
     buf = io.BytesIO()
     img.save(buf, format="JPEG", quality=85)
     return base64.b64encode(buf.getvalue()).decode("ascii")
+
+
+def encoded_size(img: Image.Image, max_edge: int = MAX_EDGE) -> tuple[int, int]:
+    """Pixel size of the image as the model will see it (after resize)."""
+    w, h = img.size
+    scale = min(1.0, max_edge / max(w, h))
+    return (round(w * scale), round(h * scale)) if scale < 1.0 else (w, h)
 
 
 def scale_factor(img: Image.Image, mon: dict, max_edge: int = MAX_EDGE) -> float:

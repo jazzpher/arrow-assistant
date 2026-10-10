@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import sys
 import threading
+from concurrent.futures import ThreadPoolExecutor
 
 from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtWidgets import QApplication
@@ -16,7 +17,8 @@ from . import ai, capture, config, kb
 from .hotkey import HotkeyListener
 from .memory import Memory
 from .overlay import ArrowOverlay
-from .points import parse_points
+from .errlog import log_error
+from .points import Point, SpeechFilter, parse_points
 from .sentences import SentenceStreamer
 from .stt import MicRecorder, transcribe
 from .tray import Tray
@@ -29,6 +31,7 @@ from .agent.trigger import parse_agent_request
 class ArrowApp(QObject):
     show_points = pyqtSignal(list)
     status = pyqtSignal(str)
+    error = pyqtSignal(str)
 
     def __init__(self):
         super().__init__()
@@ -40,11 +43,13 @@ class ArrowApp(QObject):
         self.memory = Memory()
         self.overlay = ArrowOverlay(self._qt_app)
         self.recorder = MicRecorder()
-        self._busy = threading.Lock()
-        self._cancel = threading.Event()
+        self._cancel = threading.Event()   # one per question; set when a newer press supersedes it
+        self._speaker: Speaker | None = None
 
         self.show_points.connect(self.overlay.point_at)
         self.tray = Tray(self._qt_app, config.hotkey(), self._quit)
+        self.status.connect(self.tray.set_status)
+        self.error.connect(self.tray.notify)
 
         self.hotkey = HotkeyListener(
             config.hotkey(), on_press=self._ptt_down, on_release=self._ptt_up)
@@ -114,73 +119,108 @@ class ArrowApp(QObject):
     def _ptt_down(self) -> None:
         self._cancel.set()  # cancel any in-flight answer
         self._cancel = threading.Event()
+        sp = self._speaker
+        if sp is not None:
+            sp.stop()       # cut audio that is still playing
         try:
             self.recorder.start()
+            self.status.emit("listening")
         except Exception as exc:  # no mic, etc.
-            print(f"[arrow] mic error: {exc}", file=sys.stderr)
+            self._report(f"mic error: {exc}")
 
     def _ptt_up(self) -> None:
-        wav = self.recorder.stop()
+        wav = self.recorder.stop()   # b"" for accidental taps (< 0.3 s)
         if not wav:
+            self.status.emit("idle")
             return
-        if not self._busy.acquire(blocking=False):
-            return
-        threading.Thread(target=self._pipeline, args=(wav,), daemon=True).start()
+        self.status.emit("thinking")
+        # No busy lock: a newer question always runs; the older one was
+        # already cancelled by _ptt_down.
+        threading.Thread(target=self._pipeline, args=(wav, self._cancel),
+                         daemon=True).start()
+
+    def _report(self, msg: str) -> None:
+        log_error(msg)
+        self.error.emit(msg[:200])
+
+    def _gather_context(self):
+        """Screen + memory + docs; independent of the transcript, so it
+        runs while STT is in flight (and the screenshot matches the
+        moment the user released the key)."""
+        app = capture.foreground_app()
+        mon, img = capture.primary_shot()
+        image_b64 = capture.encode_for_model(img)
+        return (app, mon, img, image_b64,
+                self.memory.recall(app), kb.lookup(app))
 
     # -- pipeline (worker thread) -------------------------------------------
-    def _pipeline(self, wav: bytes) -> None:
-        cancel = self._cancel
+    def _pipeline(self, wav: bytes, cancel: threading.Event) -> None:
         try:
             if self.provider is None:
-                print("[arrow] no LLM key configured - see README setup", file=sys.stderr)
+                self._report("no LLM key configured - see README setup")
                 return
-            question = transcribe(wav, self.stt_provider,
+            with ThreadPoolExecutor(max_workers=2) as ex:
+                f_stt = ex.submit(transcribe, wav, self.stt_provider,
                                   config.get_key("GROQ_API_KEY"))
+                f_ctx = ex.submit(self._gather_context)
+                question = f_stt.result()
+                app, mon, img, image_b64, mem, kb_text = f_ctx.result()
             if not question or cancel.is_set():
                 return
             if parse_agent_request(question) is not None:
                 self.handle_agent_text(question)   # "Arrow agent, ..." in teach mode
                 return
-            app = capture.foreground_app()
-            mon, img = capture.primary_shot()
-            image_b64 = capture.encode_for_model(img)
-            mem = self.memory.recall(app)
-            kb_text = kb.lookup(app)
 
             streamer = SentenceStreamer()
+            tags = SpeechFilter()
             speaker = Speaker()
+            self._speaker = speaker
             speaker.start()
-            full: list[str] = []
+            spoken: list[str] = []
+            shown: list[Point] = []
+            s = capture.scale_factor(img, mon)
+            enc_w, enc_h = capture.encoded_size(img)
+
+            def say(text: str) -> None:
+                spoken.append(text)
+                for sentence in streamer.feed(text):
+                    speaker.say(sentence)
+
             try:
                 for chunk in ai.stream_answer(
-                        self.provider, question, app, mem, kb_text, image_b64):
+                        self.provider, question, app, mem, kb_text, image_b64,
+                        image_size=(enc_w, enc_h)):
                     if cancel.is_set():
                         speaker.stop()
                         return
-                    full.append(chunk)
-                    for sentence in streamer.feed(chunk):
-                        speaker.say(sentence)
+                    text, pts = tags.feed(chunk)
+                    if text:
+                        say(text)
+                    if pts and not cancel.is_set():
+                        for p in pts:   # clamp inside the image the model saw
+                            x = min(max(p.x, 0), enc_w - 1)
+                            y = min(max(p.y, 0), enc_h - 1)
+                            shown.append(Point(mon["left"] + round(x / s),
+                                               mon["top"] + round(y / s), p.label))
+                        # arrow appears while she is still talking
+                        self.show_points.emit(list(shown))
+                tail = tags.flush()
+                if tail:
+                    say(tail)
                 for sentence in streamer.flush():
                     speaker.say(sentence)
             finally:
                 speaker.finish()
 
-            text, points = parse_points("".join(full))
+            text = "".join(spoken).strip()
             if text:
                 self.memory.record(app, question, text)
-            if points and not cancel.is_set():
-                s = capture.scale_factor(img, mon)
-                from .points import Point
-                mapped = [
-                    Point(mon["left"] + round(p.x / s),
-                          mon["top"] + round(p.y / s), p.label)
-                    for p in points]
-                self.show_points.emit(mapped)
             speaker.wait()
         except Exception as exc:
-            print(f"[arrow] pipeline error: {exc}", file=sys.stderr)
+            self._report(f"pipeline error: {exc}")
         finally:
-            self._busy.release()
+            self._speaker = None
+            self.status.emit("idle")
 
     def _quit(self) -> None:
         self.hotkey.stop()

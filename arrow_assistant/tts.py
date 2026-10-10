@@ -82,6 +82,7 @@ class Speaker:
         self._stop.set()
         with self._q.mutex:
             self._q.queue.clear()
+        self._q.put(None)  # wake the synth thread so it exits
 
     def wait(self) -> None:
         if self._thread:
@@ -102,9 +103,13 @@ class Speaker:
             while not self._stop.is_set():
                 item = self._q.get()
                 if item is None:
-                    prefetch.put(None)
-                    return
+                    break
                 prefetch.put((item, self._synthesize(item)))
+            # always end the player loop (also after stop())
+            try:
+                prefetch.put(None, timeout=1)
+            except queue.Full:
+                pass
 
         threading.Thread(target=gen, daemon=True).start()
         while True:

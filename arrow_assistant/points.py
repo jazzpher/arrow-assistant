@@ -31,6 +31,60 @@ def parse_points(text: str) -> tuple[str, list[Point]]:
     return spoken, points[:MAX_POINTS]
 
 
+_TAG_HEAD = "[POINT:"
+_MAX_TAG_LEN = 140
+
+
+class SpeechFilter:
+    """Streaming filter: removes [POINT:...] tags from text on its way to
+    the speaker and reports each point the moment its tag completes.
+
+    A tag split across stream chunks (e.g. "...Export. [POI" then
+    "NT:812,340:Export]") is held back until it resolves, so a half tag
+    is never spoken. feed() returns (speakable_text, new_points).
+    """
+
+    def __init__(self) -> None:
+        self._buf = ""
+        self._count = 0
+
+    def feed(self, chunk: str) -> tuple[str, list[Point]]:
+        self._buf += chunk
+        out: list[str] = []
+        points: list[Point] = []
+        while True:
+            i = self._buf.find("[")
+            if i < 0:
+                out.append(self._buf)
+                self._buf = ""
+                break
+            out.append(self._buf[:i])
+            rest = self._buf[i:]
+            m = POINT_RE.match(rest)
+            if m:
+                if self._count < MAX_POINTS:
+                    points.append(Point(int(m.group(1)), int(m.group(2)),
+                                        m.group(3).strip()))
+                    self._count += 1
+                self._buf = rest[m.end():]
+                continue
+            could_grow = (
+                _TAG_HEAD.startswith(rest)
+                or (rest.startswith(_TAG_HEAD) and "]" not in rest
+                    and "\n" not in rest and len(rest) < _MAX_TAG_LEN))
+            if could_grow:
+                self._buf = rest      # wait for more text
+                break
+            out.append("[")           # a plain bracket, not a tag
+            self._buf = rest[1:]
+        return "".join(out), points
+
+    def flush(self) -> str:
+        """End of stream: drop an unfinished tag, keep any other text."""
+        rest, self._buf = self._buf, ""
+        return "" if rest.startswith(_TAG_HEAD) or _TAG_HEAD.startswith(rest) else rest
+
+
 def route_points(points: list[Point], monitors: list[dict]) -> dict[int, list[Point]]:
     """Group points by index of the monitor that contains them.
 

@@ -10,10 +10,9 @@ SetWindowPos(SWP_FRAMECHANGED).
 """
 from __future__ import annotations
 
-import math
 import sys
 
-from PyQt6.QtCore import QPointF, Qt, QTimer
+from PyQt6.QtCore import QPointF, QRectF, Qt, QTimer
 from PyQt6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen, QPolygonF
 from PyQt6.QtWidgets import QApplication, QWidget
 
@@ -23,10 +22,32 @@ ARROW_COLOR = QColor(37, 99, 235)      # blue-600
 ARROW_DURATION_MS = 6_000              # arrows clear themselves
 
 
+def physical_to_local(px: float, py: float, left: float, top: float,
+                      dpr: float) -> tuple[float, float]:
+    """Physical desktop pixel (what mss/the model use) -> widget-local
+    logical pixel. Qt6 sizes widgets in device-independent pixels, so at
+    125%/150% scaling the offset from the monitor origin must be divided
+    by the devicePixelRatio or the arrow lands ~1.5x too far out."""
+    d = dpr if dpr and dpr > 0 else 1.0
+    return (px - left) / d, (py - top) / d
+
+
+def clamp_label_box(bx: float, by: float, tw: float, th: float,
+                    x: float, y: float, w: float, h: float) -> tuple[float, float]:
+    """Keep the label box inside the widget; flip left/up of the arrow
+    tip (x, y) when it would run off the right/bottom edge."""
+    if bx + tw > w - 4:
+        bx = max(4, x - 8 - tw)
+    if by + th > h - 4:
+        by = max(4, y - 8 - th)
+    return bx, by
+
+
 class _MonitorOverlay(QWidget):
-    def __init__(self, geometry):
+    def __init__(self, geometry, dpr: float = 1.0):
         super().__init__()
-        self._geo = geometry  # QRect of the physical monitor, virtual coords
+        self._geo = geometry  # QRect of the monitor; x/y are native (physical) origin
+        self._dpr = dpr or 1.0
         self._points: list[Point] = []
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
@@ -74,12 +95,12 @@ class _MonitorOverlay(QWidget):
         font = QFont("Segoe UI", 11, QFont.Weight.Bold)
         p.setFont(font)
         for pt in self._points:
-            lx = pt.x - self._geo.x()
-            ly = pt.y - self._geo.y()
+            lx, ly = physical_to_local(pt.x, pt.y, self._geo.x(),
+                                       self._geo.y(), self._dpr)
             self._draw_arrow(p, lx, ly, pt.label)
         p.end()
 
-    def _draw_arrow(self, p: QPainter, x: int, y: int, label: str) -> None:
+    def _draw_arrow(self, p: QPainter, x: float, y: float, label: str) -> None:
         # arrow cursor shape pointing at (x, y), coming from upper-left
         cursor = QPolygonF([
             QPointF(x, y), QPointF(x, y + 34), QPointF(x + 9, y + 26),
@@ -95,12 +116,13 @@ class _MonitorOverlay(QWidget):
             metrics = p.fontMetrics()
             tw = metrics.horizontalAdvance(label) + 16
             th = metrics.height() + 10
-            bx, by = x + 28, y + 30
+            bx, by = clamp_label_box(x + 28, y + 30, tw, th, x, y,
+                                     self.width(), self.height())
             p.setPen(Qt.PenStyle.NoPen)
             p.setBrush(QColor(15, 23, 42, 220))
-            p.drawRoundedRect(bx, by, tw, th, 6, 6)
+            p.drawRoundedRect(QRectF(bx, by, tw, th), 6, 6)
             p.setPen(QColor("white"))
-            p.drawText(bx + 8, by + th - 8, label)
+            p.drawText(QPointF(bx + 8, by + th - 8), label)
 
 
 class ArrowOverlay:
@@ -109,7 +131,8 @@ class ArrowOverlay:
     def __init__(self, app: QApplication):
         self._overlays: list[_MonitorOverlay] = []
         for screen in app.screens():
-            self._overlays.append(_MonitorOverlay(screen.geometry()))
+            self._overlays.append(_MonitorOverlay(
+                screen.geometry(), screen.devicePixelRatio()))
         self._timer = QTimer()
         self._timer.setSingleShot(True)
         self._timer.timeout.connect(self.clear)
@@ -119,7 +142,9 @@ class ArrowOverlay:
             return
         monitors = [{
             "left": ov._geo.x(), "top": ov._geo.y(),
-            "width": ov._geo.width(), "height": ov._geo.height(),
+            # physical size: points arrive in physical desktop pixels
+            "width": round(ov._geo.width() * ov._dpr),
+            "height": round(ov._geo.height() * ov._dpr),
         } for ov in self._overlays]
         routed = route_points(points, monitors)
         for i, overlay in enumerate(self._overlays):
@@ -133,6 +158,3 @@ class ArrowOverlay:
         for overlay in self._overlays:
             overlay.clear_points()
 
-
-# quiet the unused-import warning for math (kept for future draw modes)
-_ = math
