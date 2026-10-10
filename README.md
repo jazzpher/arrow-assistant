@@ -33,7 +33,7 @@ The original Clicky Windows runs on paid APIs (Anthropic + AssemblyAI + Cartesia
 | Text-to-speech | Cartesia / ElevenLabs (paid) | **edge-tts** (free neural voices, no key), or pyttsx3 offline |
 | Keys storage | keyring | same (Windows Credential Manager) |
 
-Fully offline mode (local whisper + pyttsx3) works with **zero API keys**, it is just slower.
+Local speech (local whisper + pyttsx3) needs **zero speech API keys** and is slower. Install the optional speech dependencies below first. The vision/LLM still needs a cloud provider key.
 
 ## Agent mode (new)
 
@@ -41,16 +41,42 @@ Arrow can also *do* short tasks for you, with approval and a panic key. See [doc
 
 ## Setup
 
-1. Install Python 3.11+ on Windows.
-2. `pip install -r requirements.txt`
+1. Install **64-bit Python 3.12** on Windows (recommended). Do not use 32-bit Python for this setup. Python 3.15 is not supported: required native packages, including optional CTranslate2, do not all publish 3.15 wheels. Python 3.13/3.14 have default-install CI checks, but use 3.12 for this setup.
+2. From the extracted project folder, create a clean environment:
+   ```powershell
+   py -3.12 -m venv .venv
+   .\.venv\Scripts\python.exe -m pip install --upgrade pip
+   .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+   ```
 3. Copy `.env.example` to `.env` and add what you have:
    - `GEMINI_API_KEY` - free key from [Google AI Studio](https://aistudio.google.com/apikey) (recommended), **or** `OPENROUTER_API_KEY`, **or** `NVIDIA_API_KEY`
-   - `GROQ_API_KEY` - free key from [Groq](https://console.groq.com/keys); leave empty to use local whisper instead
+   - `GROQ_API_KEY` - free key from [Groq](https://console.groq.com/keys) for the default lightweight install; without it you need the optional local speech install below
    - TTS needs no key.
-4. `python -m arrow_assistant`
+4. `.\.venv\Scripts\python.exe -m arrow_assistant`
 5. Hold `Ctrl+Alt+Space`, ask something, release.
 
 Everything runs through your own keys. Nothing routes through a proxy server.
+
+### Optional local speech
+
+The normal install does **not** include faster-whisper/CTranslate2 or pyttsx3.
+For local speech, in the same environment:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-local.txt
+```
+
+This option downloads a model on first use and takes extra disk space and RAM.
+Use Groq speech on a low-memory PC. If pip reports no matching CTranslate2
+build, check your Python version, architecture, and package index rather than
+forcing incompatible versions. A missing local speech package gives an
+installation hint instead of an unexplained import error.
+
+For an existing failed install, you can use the default cloud speech path by
+removing the `faster-whisper` and `pyttsx3` lines from the old requirements file,
+then running `python -m pip install --upgrade pip` and
+`python -m pip install -r requirements.txt`. This does not fix unsupported
+Python/architecture combinations for the remaining native packages.
 
 ## How it works
 
