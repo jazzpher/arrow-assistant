@@ -36,7 +36,7 @@ def play_mp3(mp3_bytes: bytes, stop: threading.Event) -> None:
     import numpy as np
     import sounddevice as sd
 
-    decoded = miniaudio.decode_file(io.BytesIO(mp3_bytes),
+    decoded = miniaudio.decode(mp3_bytes,
                                     output_format=miniaudio.SampleFormat.FLOAT32,
                                     nchannels=1)
     samples = np.frombuffer(decoded.samples, dtype=np.float32)
