@@ -51,6 +51,14 @@ def build_user_content(question: str, app: str, memory: str,
     return parts
 
 
+def _check(resp, name: str) -> None:
+    """Raise on HTTP errors WITHOUT echoing the request URL or headers
+    (requests' own message contains the full URL), so a 429/500 can
+    never put an API key into the logs."""
+    if resp.status_code >= 400:
+        raise RuntimeError(f"{name} request failed: HTTP {resp.status_code}")
+
+
 def stream_answer(provider: LLMProvider, question: str, app: str,
                   memory: str, kb_text: str | None,
                   image_b64: str | None,
@@ -78,14 +86,16 @@ def _to_gemini_contents(parts: list[dict]) -> list[dict]:
 def _stream_gemini(provider: LLMProvider, parts: list[dict],
                    timeout: int) -> Iterator[str]:
     url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
-           f"{provider.model}:streamGenerateContent?alt=sse&key={provider.api_key}")
+           f"{provider.model}:streamGenerateContent?alt=sse")
+    headers = {"x-goog-api-key": provider.api_key}  # never put the key in the URL
     body = {
         "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
         "contents": _to_gemini_contents(parts),
         "generationConfig": {"maxOutputTokens": 400, "temperature": 0.4},
     }
-    with requests.post(url, json=body, stream=True, timeout=timeout) as resp:
-        resp.raise_for_status()
+    with requests.post(url, json=body, headers=headers, stream=True,
+                       timeout=timeout) as resp:
+        _check(resp, provider.name)
         for line in resp.iter_lines(decode_unicode=True):
             if not line or not line.startswith("data:"):
                 continue
@@ -120,7 +130,7 @@ def _stream_openai_compat(provider: LLMProvider, parts: list[dict],
     }
     with requests.post(url, json=body, headers=headers,
                        stream=True, timeout=timeout) as resp:
-        resp.raise_for_status()
+        _check(resp, provider.name)
         for line in resp.iter_lines(decode_unicode=True):
             if not line or not line.startswith("data:"):
                 continue
