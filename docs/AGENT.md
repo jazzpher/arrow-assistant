@@ -46,8 +46,14 @@ emails, documents and notifications that are visible still get uploaded.
 - **Typing follows the real keyboard focus.** Right before every type/key action the agent re-checks the
   focused window (if it changed since the screenshot, it re-plans) and asks UI Automation which field has
   focus (a password field is blocked even if focus got there via Tab).
-- **`open_app` only types into the Start menu.** If Start does not open, or loses focus before Enter, the
-  action is aborted, so the app name and Enter never land in a chat or document.
+- **Unknown keyboard focus means no input.** If Windows/UI Automation cannot verify the window and
+  field, keyboard actions re-plan and stop after repeated failures. Use manual input in apps without UIA.
+- **Typing re-checks the window and field before each character.** A change stops the remaining text.
+  Password and named PIN/OTP/card fields are checked again after approval.
+- **`open_app` checks Start before every character and before Enter.** A lost Start focus aborts the
+  remaining input. These checks reduce focus races, but Windows focus can still change between a check
+  and a keystroke. Already typed characters cannot be undone automatically; use per-action approval
+  and supervise agent mode. This is not a guarantee that input can never reach another window.
 - On-screen text is treated as data, not instructions (prompt-injection defense), and a send/delete
   button still needs your approval even if a web page tells the agent to press it.
 - If the screen changes while you are deciding, the agent re-plans instead of clicking a stale spot.

@@ -163,6 +163,10 @@ def focused_element() -> Element | None:
         rect = (int(r.left), int(r.top), int(r.right), int(r.bottom))
     except Exception:
         rect = (0, 0, 0, 0)
+    try:
+        runtime_id = tuple(c.GetRuntimeId() or ())
+    except Exception:
+        runtime_id = ()
     return Element(0, (c.Name or "").strip()[:60], _role(c.ControlTypeName or ""), rect,
                    bool(getattr(c, "IsEnabled", True)),
-                   bool(getattr(c, "IsPassword", False)))
+                   bool(getattr(c, "IsPassword", False)), runtime_id)

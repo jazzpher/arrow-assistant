@@ -21,6 +21,7 @@ class Element:
     rect: Rect                     # screen px
     enabled: bool = True
     password: bool = False
+    runtime_id: tuple[int, ...] = ()  # stable UIA identity when supplied
 
     @property
     def center(self) -> Point:

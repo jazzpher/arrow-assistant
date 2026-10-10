@@ -28,6 +28,7 @@ def mask_image(img: Image.Image, frame: Frame, rects: list[Rect]) -> None:
 
 
 class WindowsScreen:
+    require_verified_focus = True
     def __init__(self, collect_elements: Callable | None = None,
                  focused: Callable | None = None):
         self._collect = collect_elements   # uia.collect, optional (M4)

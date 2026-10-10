@@ -24,7 +24,7 @@ class LiveScreen(FakeScreen):
 
     def __init__(self, *a, **kw):
         super().__init__(*a, **kw)
-        self.focus = None
+        self.focus = el(0, "Document", role="Edit")
         self.fg = None          # None = report whatever observe() reports
 
     def focused_element(self):
@@ -160,7 +160,7 @@ def test_open_app_skips_enter_when_start_loses_focus():
         typed = any(c[0] == "type" for c in b.calls)
         return "messenger.exe" if typed else ("searchhost.exe" if b.calls else "notepad.exe")
     e, b, a = _open(fg)
-    with pytest.raises(ActionAborted, match="did not press Enter"):
+    with pytest.raises(ActionAborted, match="stopped typing app name"):
         e.perform(a, None, None)
     assert ("hotkey", ("enter",)) not in b.calls
 
@@ -168,7 +168,7 @@ def test_open_app_skips_enter_when_start_loses_focus():
 def test_open_app_does_not_toggle_an_already_open_start_menu():
     e, b, a = _open(lambda b: "StartMenuExperienceHost.exe")
     e.perform(a, None, None)
-    assert b.calls == [("type", "notepad"), ("hotkey", ("enter",))]
+    assert b.calls == [("type", ch) for ch in "notepad"] + [("hotkey", ("enter",))]
 
 
 def test_open_app_happy_path_waits_for_start():
@@ -181,7 +181,7 @@ def test_open_app_happy_path_waits_for_start():
         return "searchhost.exe" if seen["n"] > 2 else "notepad.exe"   # Start is a bit slow
     e, b, a = _open(fg)
     e.perform(a, None, None)
-    assert b.calls == [("hotkey", ("win",)), ("type", "notepad"), ("hotkey", ("enter",))]
+    assert b.calls == [("hotkey", ("win",))] + [("type", ch) for ch in "notepad"] + [("hotkey", ("enter",))]
 
 
 def test_loop_survives_an_aborted_action_and_replans():

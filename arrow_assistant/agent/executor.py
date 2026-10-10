@@ -14,7 +14,7 @@ from .actions import POINTER_KINDS, Action
 from .panic import PanicStop, PanicSwitch
 
 Point = tuple[int, int]
-TYPE_CHUNK = 12
+TYPE_CHUNK = 1  # recheck focus before each character, including Tab/Enter
 
 # Processes that own the Start menu / Start search box (Windows 10 and 11).
 START_HOSTS = frozenset({
@@ -27,9 +27,10 @@ START_WAIT_S = 2.0
 
 
 class ActionAborted(RuntimeError):
-    """An action stopped half-way on purpose, before anything risky was
-    sent (e.g. the Start menu never opened, so the app name and Enter were
-    NOT typed into whatever window had focus)."""
+    """Stop remaining input when safety cannot be verified.
+
+    Earlier characters may already have been typed; never claim rollback.
+    """
 
 
 def _default_foreground() -> str:
@@ -102,6 +103,16 @@ class RealExecutor:
         self._panic = panic
         self._sleep = sleep
         self._fg = foreground or _default_foreground
+        self._keyboard_check = None
+
+    def set_keyboard_guard(self, check: Callable[[], None]) -> None:
+        """Bind a live guard for the current action, supplied by AgentLoop."""
+        self._keyboard_check = check
+
+    def _check_keyboard(self) -> None:
+        if self._keyboard_check is None:
+            raise ActionAborted("keyboard focus has not been verified")
+        self._keyboard_check()
 
     def _foreground(self) -> str:
         try:
@@ -134,7 +145,11 @@ class RealExecutor:
                     f"Start menu did not open (focused: {self._foreground() or 'unknown'}); "
                     "typed nothing")
         self._panic.check()
-        self._b.type_text(app)
+        for ch in app:
+            self._panic.check()
+            if self._foreground() not in START_HOSTS:
+                raise ActionAborted("Start menu lost focus; stopped typing app name")
+            self._b.type_text(ch)
         self._sleep(0.9)
         self._panic.check()
         if self._foreground() not in START_HOSTS:
@@ -157,9 +172,11 @@ class RealExecutor:
             text = action.text or ""
             for i in range(0, len(text), TYPE_CHUNK):
                 self._panic.check()   # stop mid-sentence if the user hits panic
+                self._check_keyboard()
                 self._b.type_text(text[i:i + TYPE_CHUNK])
             return None
         if k == "key":
+            self._check_keyboard()
             self._b.hotkey(*action.keys)
             return None
         if k == "scroll":

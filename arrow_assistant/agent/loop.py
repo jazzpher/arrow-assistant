@@ -277,6 +277,20 @@ class AgentLoop:
                                        n, True)
                 obs = None
                 continue
+            # Fake/dry-run executors need no OS callback. RealExecutor refuses
+            # keyboard input without one, and checks it for every character.
+            bind = getattr(self.executor, "set_keyboard_guard", None)
+            if bind and action.kind in KEYBOARD_KINDS:
+                initial_field = self._live_focus()
+
+                def check_keyboard():
+                    verdict, why = self._keyboard_guard(action, obs)
+                    if verdict:
+                        raise ActionAborted(why)
+                    now = self._live_focus()
+                    if initial_field != now:
+                        raise ActionAborted("focused field changed; stopped remaining input")
+                bind(check_keyboard)
             self.ui.preview(pt, label or action.describe())
             self.panic.check()
 
@@ -384,6 +398,12 @@ class AgentLoop:
         if action.kind not in KEYBOARD_KINDS:
             return "", ""
         fg = self._live_foreground()
+        strict = getattr(self.screen, "require_verified_focus", False) or hasattr(self.screen, "foreground")
+        if getattr(self.screen, "require_verified_focus", False) and not obs.hwnd:
+            return "replan", "screenshot window identity is unknown; use manual input"
+        if strict and (fg is None or not fg[0] or fg[0].lower() == "unknown"
+                       or (len(fg) > 2 and not fg[2])):
+            return "replan", "cannot verify foreground window; use manual input"
         if fg is not None:
             app, title = (fg[0] or "").lower(), fg[1] or ""
             hwnd = fg[2] if len(fg) > 2 else 0
@@ -396,10 +416,18 @@ class AgentLoop:
             if moved:
                 return "replan", (f"focus moved to '{title[:40] or app}' before the "
                                   f"{action.kind}; re-planning instead of typing blind")
+        f = self._live_focus()
+        if strict and (f is None or not f.enabled or not f.role
+                       or (not f.runtime_id and f.area <= 0)):
+            return "replan", "cannot verify keyboard field; use manual input"
         if action.kind == "type":
-            f = self._live_focus()
-            if f is not None and f.password:
-                return "block", "keyboard focus is in a password field"
+            if f is not None:
+                if f.password:
+                    return "block", "keyboard focus is in a password field"
+                live_risk = self.risk(RiskContext(action, obs.app, obs.title,
+                    f.name, "", target_is_password=f.password))
+                if live_risk.blocked:
+                    return "block", "; ".join(live_risk.reasons)
         return "", ""
 
     def _gate_user(self) -> None:
