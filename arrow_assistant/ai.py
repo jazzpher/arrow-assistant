@@ -12,6 +12,7 @@ screenshot pixel coordinates; points.py turns those into overlay arrows.
 from __future__ import annotations
 
 import json
+import re
 from typing import Iterator
 
 import requests
@@ -64,6 +65,37 @@ def build_user_content(question: str, app: str, memory: str,
     return parts
 
 
+# Gemini 3.x thinks by default (3.8 Flash: "medium"), and thinking tokens
+# count toward maxOutputTokens. A 400-token cap was being spent on
+# reasoning, so answers and [POINT] tags came back cut short or empty.
+# Gemini 3 also deprecates temperature/top_p/top_k.
+GEMINI3_THINKING_LEVEL = "low"        # 3.8 Flash rejects "minimal"
+GEMINI3_THINKING_HEADROOM = 4096      # cap only; you pay for tokens used
+
+
+def is_gemini3_or_newer(model: str) -> bool:
+    """True for gemini-3.x and later; False for gemini-2.x / 1.x."""
+    m = re.match(r"(?:models/)?gemini-(\d+)", (model or "").strip().lower())
+    return bool(m) and int(m.group(1)) >= 3
+
+
+def gemini_generation_config(model: str, max_tokens: int, temperature: float,
+                             disable_legacy_thinking: bool = False) -> dict:
+    """generationConfig for a Gemini call, correct for 2.x and 3.x models.
+
+    Gemini 3+: low thinking level, extra headroom so thinking cannot eat
+    the answer, and no sampling params. Gemini 2.x: unchanged behaviour
+    (temperature; thinkingBudget=0 on 2.5 when disable_legacy_thinking).
+    """
+    if is_gemini3_or_newer(model):
+        return {"maxOutputTokens": max_tokens + GEMINI3_THINKING_HEADROOM,
+                "thinkingConfig": {"thinkingLevel": GEMINI3_THINKING_LEVEL}}
+    gen = {"maxOutputTokens": max_tokens, "temperature": temperature}
+    if disable_legacy_thinking and "2.5" in (model or ""):
+        gen["thinkingConfig"] = {"thinkingBudget": 0}
+    return gen
+
+
 def _check(resp, name: str) -> None:
     """Raise on HTTP errors WITHOUT echoing the request URL or headers
     (requests' own message contains the full URL), so a 429/500 can
@@ -105,7 +137,7 @@ def _stream_gemini(provider: LLMProvider, parts: list[dict],
     body = {
         "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
         "contents": _to_gemini_contents(parts),
-        "generationConfig": {"maxOutputTokens": 400, "temperature": 0.4},
+        "generationConfig": gemini_generation_config(provider.model, 400, 0.4),
     }
     with requests.post(url, json=body, headers=headers, stream=True,
                        timeout=timeout) as resp:
@@ -120,7 +152,7 @@ def _stream_gemini(provider: LLMProvider, parts: list[dict],
                 data = json.loads(payload)
                 for cand in data.get("candidates", []):
                     for part in cand.get("content", {}).get("parts", []):
-                        if "text" in part:
+                        if "text" in part and not part.get("thought"):
                             yield part["text"]
             except json.JSONDecodeError:
                 continue
