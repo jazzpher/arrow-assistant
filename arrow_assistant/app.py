@@ -17,7 +17,7 @@ from . import ai, capture, config, kb
 from .hotkey import HotkeyListener
 from .memory import Memory
 from .overlay import ArrowOverlay
-from .errlog import log_error
+from .errlog import log_error, log_diagnostic
 from .points import Point, SpeechFilter, parse_points
 from .sentences import SentenceStreamer
 from .stt import MicRecorder, transcribe
@@ -206,6 +206,10 @@ class ArrowApp(QObject):
                         # arrow appears while she is still talking
                         self.show_points.emit(list(shown))
                 tail = tags.flush()
+                log_diagnostic(
+                    f"teach points: parsed={len(shown)} invalid={tags.invalid_tags} "
+                    f"incomplete={tags.incomplete_tags} image={enc_w}x{enc_h} "
+                    f"monitor={mon['left']},{mon['top']} scale={s:.4f}")
                 if tail:
                     say(tail)
                 for sentence in streamer.flush():

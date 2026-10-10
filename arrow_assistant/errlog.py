@@ -16,10 +16,15 @@ def log_path() -> str:
     return os.path.join(base, "arrow.log")
 
 
-def log_error(msg: str) -> None:
+def log_diagnostic(msg: str) -> None:
+    """Internal metadata only: never pass model text, keys or screenshots here."""
     print(f"[arrow] {msg}", file=sys.stderr)
     try:
         with open(log_path(), "a", encoding="utf-8") as f:
             f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}\n")
     except OSError:
         pass
+
+
+def log_error(msg: str) -> None:
+    log_diagnostic(msg)
