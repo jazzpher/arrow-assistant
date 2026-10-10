@@ -60,7 +60,7 @@ class LLMProvider:
 
 GEMINI_MODEL = os.environ.get("ARROW_GEMINI_MODEL", "gemini-3.8-flash")
 OPENROUTER_MODEL = os.environ.get(
-    "ARROW_OPENROUTER_MODEL", "google/gemini-2.0-flash-exp:free")
+    "ARROW_OPENROUTER_MODEL", "google/gemma-4-31b-it:free")
 NVIDIA_MODEL = os.environ.get(
     "ARROW_NVIDIA_MODEL", "meta/llama-3.2-90b-vision-instruct")
 GROQ_WHISPER_MODEL = "whisper-large-v3-turbo"
@@ -119,7 +119,7 @@ def agent_max_steps() -> int:
 
 AGENT_GEMINI_MODEL = os.environ.get("ARROW_AGENT_GEMINI_MODEL", "gemini-3.8-flash")
 AGENT_OPENROUTER_MODEL = os.environ.get(
-    "ARROW_AGENT_OPENROUTER_MODEL", "google/gemini-2.0-flash-exp:free")
+    "ARROW_AGENT_OPENROUTER_MODEL", "google/gemma-4-31b-it:free")
 AGENT_NVIDIA_MODEL = os.environ.get(
     "ARROW_AGENT_NVIDIA_MODEL", "meta/llama-3.2-90b-vision-instruct")
 

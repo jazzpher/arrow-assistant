@@ -5,12 +5,19 @@ from PyQt6.QtGui import QAction, QColor, QIcon, QPainter, QPixmap
 from PyQt6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 
-def _make_icon() -> QIcon:
+STATUS_COLORS = {
+    "idle": QColor(37, 99, 235),        # blue
+    "listening": QColor(220, 38, 38),   # red while the hotkey is held
+    "thinking": QColor(234, 179, 8),    # yellow while STT/LLM runs
+}
+
+
+def _make_icon(status: str = "idle") -> QIcon:
     pix = QPixmap(64, 64)
     pix.fill(QColor("transparent"))
     p = QPainter(pix)
     p.setRenderHint(QPainter.RenderHint.Antialiasing)
-    p.setBrush(QColor(37, 99, 235))
+    p.setBrush(STATUS_COLORS.get(status, STATUS_COLORS["idle"]))
     p.setPen(QColor("white"))
     # simple arrow cursor glyph
     from PyQt6.QtCore import QPointF
@@ -37,3 +44,10 @@ class Tray:
         menu.addAction(quit_action)
         self.tray.setContextMenu(menu)
         self.tray.show()
+
+    def set_status(self, status: str) -> None:
+        self.tray.setIcon(_make_icon(status))
+
+    def notify(self, message: str) -> None:
+        self.tray.showMessage("Arrow Assistant", message,
+                              QSystemTrayIcon.MessageIcon.Warning, 6000)

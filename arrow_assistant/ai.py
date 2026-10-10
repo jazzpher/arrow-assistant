@@ -35,9 +35,13 @@ Rules:
 
 def build_user_content(question: str, app: str, memory: str,
                        kb_text: str | None, include_image: bool,
-                       image_b64: str | None) -> list[dict]:
+                       image_b64: str | None,
+                       image_size: tuple[int, int] | None = None) -> list[dict]:
     """Assemble the multimodal user message (OpenAI content-part shape)."""
     ctx = [f"The focused app is: {app}", f"The user asks: {question}"]
+    if image_size and include_image:
+        ctx.append(f"The screenshot is {image_size[0]}x{image_size[1]} px. "
+                   f"POINT coordinates must be inside it.")
     if memory:
         ctx.append(f"Recent history with this app:\n{memory}")
     if kb_text:
@@ -62,10 +66,11 @@ def _check(resp, name: str) -> None:
 def stream_answer(provider: LLMProvider, question: str, app: str,
                   memory: str, kb_text: str | None,
                   image_b64: str | None,
-                  timeout: int = 60) -> Iterator[str]:
+                  timeout: int = 60,
+                  image_size: tuple[int, int] | None = None) -> Iterator[str]:
     """Yield streamed text chunks of the model's answer."""
     parts = build_user_content(question, app, memory, kb_text,
-                               bool(image_b64), image_b64)
+                               bool(image_b64), image_b64, image_size)
     if provider.name == "gemini":
         yield from _stream_gemini(provider, parts, timeout)
     else:

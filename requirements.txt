@@ -1,4 +1,4 @@
-# Ituro Windows - dependencies
+# Arrow Assistant - dependencies
 # Core (always needed)
 PyQt6>=6.7.0            # Transparent click-through overlay + tray
 pynput>=1.7.7           # Observe-only global hotkey (suppress=False, never blocks typing)
