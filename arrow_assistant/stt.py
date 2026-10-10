@@ -86,7 +86,15 @@ def _get_whisper():
     global _whisper_model
     with _whisper_lock:
         if _whisper_model is None:
-            from faster_whisper import WhisperModel  # lazy: heavy import
+            try:
+                from faster_whisper import WhisperModel  # lazy: heavy import
+            except ImportError as exc:
+                raise RuntimeError(
+                    "Local speech recognition is not installed or could not load. "
+                    "Add your free Groq key in Settings to use cloud speech, or run "
+                    "python -m pip install -r requirements-local.txt in a supported "
+                    "64-bit Python environment (recommended: Python 3.12)."
+                ) from exc
             _whisper_model = WhisperModel("tiny", device="cpu", compute_type="int8")
         return _whisper_model
 

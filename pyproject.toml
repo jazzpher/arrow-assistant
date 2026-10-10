@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-local = ["faster-whisper>=1.2.0", "pyttsx3>=2.90"]
+local = ["faster-whisper>=1.2.0,<2", "pyttsx3>=2.90"]
 dev = ["pytest>=8.3.0", "pytest-mock>=3.14.0"]
 
 [project.scripts]

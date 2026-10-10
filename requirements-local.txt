@@ -1,0 +1,5 @@
+# Optional local speech, in addition to requirements.txt.
+# Recommend 64-bit CPython 3.12 on Windows for this heavier fallback.
+# CTranslate2 wheels depend on Python version AND architecture.
+faster-whisper>=1.2.0,<2
+pyttsx3>=2.90

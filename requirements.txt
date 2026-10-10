@@ -14,10 +14,5 @@ keyring>=25.0           # Windows Credential Manager for API keys after setup
 edge-tts>=7.0.0         # Free neural text-to-speech, no API key needed
 miniaudio>=1.60         # MP3 decode for playback (prebuilt wheels, no ffmpeg needed)
 
-# Optional local fallbacks (lazy-imported; only loaded if selected in Settings)
-faster-whisper>=1.2.0   # Local offline STT fallback, no key, CPU-friendly tiny model
-pyttsx3>=2.90           # Local offline TTS fallback (Windows SAPI), no key
-
-# Dev / test
-pytest>=8.3.0
-pytest-mock>=3.14.0
+# Optional local speech: install requirements-local.txt separately.
+# Keep CTranslate2 and other heavy native STT dependencies out of the default install.
