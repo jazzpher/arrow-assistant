@@ -18,7 +18,6 @@ from .loop import AgentLoop, LoopConfig
 from .panic import PanicSwitch
 from .planner import Planner, ProviderChain
 from .risk import assess, is_sensitive_window
-from .screen import WindowsScreen
 from .state import StateStore
 from .ui import ConsoleUI
 
@@ -53,14 +52,8 @@ def main(argv: list[str] | None = None) -> int:
         AgentHotkeys({config.panic_hotkey(): lambda: panic.stop("panic hotkey")}).start()
     except Exception as exc:   # no keyboard backend: failsafe corner still works
         print(f"[arrow] panic hotkey unavailable ({exc}); use Ctrl+C or the screen corner")
-    collect = None
-    try:
-        import uiautomation  # noqa: F401
-        from .uia import collect_foreground
-        collect = collect_foreground
-    except ImportError:
-        pass
-    screen = WindowsScreen(collect)
+    from .stack import AgentStack
+    screen = AgentStack._real_screen()   # same UIA wiring as the tray app
     store = StateStore()
     loop = AgentLoop(
         screen, make_executor(args.dry_run, panic), Planner(ProviderChain(providers)),

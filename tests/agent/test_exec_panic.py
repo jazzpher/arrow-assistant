@@ -31,10 +31,16 @@ class FakeBackend:
     def drag(self, s, e): self.calls.append(("drag", s, e))
 
 
-def ex(panic=None, backend=None, sleeps=None):
+def start_opens_on_win(b):
+    """Fake foreground: the Start menu is focused once Win was pressed."""
+    return lambda: ("searchhost.exe" if ("hotkey", ("win",)) in b.calls else "notepad.exe")
+
+
+def ex(panic=None, backend=None, sleeps=None, foreground=None):
     panic = panic or PanicSwitch()
     b = backend or FakeBackend()
-    return RealExecutor(b, panic, sleep=(sleeps.append if sleeps is not None else lambda s: None)), b, panic
+    return RealExecutor(b, panic, sleep=(sleeps.append if sleeps is not None else lambda s: None),
+                        foreground=foreground or start_opens_on_win(b)), b, panic
 
 
 def A(raw):

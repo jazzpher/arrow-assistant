@@ -14,6 +14,7 @@ from .actions import POINTER_KINDS, Action
 from .activity import ActivityMonitor
 from .actlog import ActionLog
 from .approval import APPROVE, SKIP, STOP, ApprovalRequest, Approver
+from .executor import ActionAborted
 from .observation import Observation, changed_fraction, point_in_rects
 from .panic import PanicStop, PanicSwitch
 from .planner import PlanContext, PlannerError, QuotaExhausted
@@ -22,6 +23,7 @@ from .state import StateStore, TaskState
 from .ui import AgentUI, NullUI
 
 STALE_FRACTION = 0.03      # screen changed this much while waiting for approval
+KEYBOARD_KINDS = ("type", "key")   # go to whatever window/field has focus
 CLEAR_PREVIEW_S = 0.15
 
 
@@ -197,9 +199,12 @@ class AgentLoop:
             # ---- risk gate ------------------------------------------------------------
             target_el = obs.element_at(pt) if pt else None
             pw = bool(target_el and target_el.password)
-            if action.kind == "type" and self._focus_el is not None:
-                pw = pw or self._focus_el.password
-                label = f"{label} {self._focus_el.name}".strip()
+            if action.kind == "type":
+                for f in (self._focus_el, self._live_focus()):
+                    if f is not None:
+                        pw = pw or f.password
+                        if f.name and f.name not in label:
+                            label = f"{label} {f.name}".strip()
             ctx = RiskContext(action, obs.app, obs.title, label, state.task, pt,
                               cfg.scope_apps, self.ui.hud_rects(), pw)
             assess = self.risk(ctx)
@@ -249,13 +254,50 @@ class AgentLoop:
                     state.step -= 1
                     obs = None
                     continue
+            # ---- last-moment keyboard guard ----------------------------------------------
+            # Typing goes to whatever has focus NOW, which may not be what the
+            # screenshot (or the approval) showed: a popup, a notification or an
+            # Alt+Tab can move focus, and Tab moves it between fields.
+            verdict, why = self._keyboard_guard(action, obs)
+            if verdict == "block":
+                state.add(action.describe(), f"BLOCKED by safety: {why}")
+                self.log.step(n, action.describe(), "blocked", why, (why,), prov)
+                self.ui.say(f"Hindi ko gagawin: {why}")
+                counters["blocked"] += 1
+                if counters["blocked"] >= cfg.max_blocked:
+                    return AgentResult("blocked", f"Tinanggihan ng safety: {why}", n, True)
+                obs = None
+                continue
+            if verdict == "replan":
+                state.add(action.describe(), why)
+                self.log.step(n, action.describe(), "-", why, (), prov)
+                counters["invalid"] += 1
+                if counters["invalid"] >= cfg.max_invalid:
+                    return AgentResult("failed", "Paulit-ulit na lumilipat ang focus; huminto muna ako.",
+                                       n, True)
+                obs = None
+                continue
             self.ui.preview(pt, label or action.describe())
             self.panic.check()
 
             # ---- act ---------------------------------------------------------------------------
-            end_pt = self.executor.perform(action, pt, pt2)
+            try:
+                end_pt = self.executor.perform(action, pt, pt2)
+            except ActionAborted as exc:
+                # stopped half-way on purpose (e.g. Start menu never opened)
+                state.add(action.describe(), f"aborted for safety: {exc}")
+                self.log.step(n, action.describe(), decision_txt, f"aborted: {exc}", (), prov)
+                self._focus_el = None
+                counters["invalid"] += 1
+                if counters["invalid"] >= cfg.max_invalid:
+                    return AgentResult("failed", f"Hindi ko magawa nang ligtas: {exc}", n, True)
+                obs = None
+                continue
             if action.kind in POINTER_KINDS:
                 self._focus_el = target_el
+            elif action.kind in ("key", "open_app", "drag") or (
+                    action.kind == "type" and "\t" in (action.text or "")):
+                self._focus_el = None   # focus may have moved; do not trust the old field
             if self.activity:
                 self.activity.expect(end_pt or (self.screen.cursor() if hasattr(self.screen, "cursor") else None))
             self._sleep(cfg.settle_s)
@@ -318,6 +360,47 @@ class AgentLoop:
         if action.kind in POINTER_KINDS and pt is None:
             return None, None, label, "click has no target"
         return pt, pt2, label, ""
+
+    def _live_focus(self):
+        fn = getattr(self.screen, "focused_element", None)
+        if fn is None:
+            return None
+        try:
+            return fn()
+        except Exception:  # noqa: BLE001 - UIA hiccups must not crash the task
+            return None
+
+    def _live_foreground(self):
+        fn = getattr(self.screen, "foreground", None)
+        if fn is None:
+            return None
+        try:
+            return fn()
+        except Exception:  # noqa: BLE001
+            return None
+
+    def _keyboard_guard(self, action: Action, obs: Observation) -> tuple[str, str]:
+        """-> ("", "") to go ahead, ("replan", why) or ("block", why)."""
+        if action.kind not in KEYBOARD_KINDS:
+            return "", ""
+        fg = self._live_foreground()
+        if fg is not None:
+            app, title = (fg[0] or "").lower(), fg[1] or ""
+            hwnd = fg[2] if len(fg) > 2 else 0
+            if hwnd and obs.hwnd:
+                # same window = same target, even if its title ticks
+                # ("(2) Messenger", "*Untitled - Notepad", a playing video)
+                moved = hwnd != obs.hwnd or app != (obs.app or "").lower()
+            else:
+                moved = app != (obs.app or "").lower() or title != (obs.title or "")
+            if moved:
+                return "replan", (f"focus moved to '{title[:40] or app}' before the "
+                                  f"{action.kind}; re-planning instead of typing blind")
+        if action.kind == "type":
+            f = self._live_focus()
+            if f is not None and f.password:
+                return "block", "keyboard focus is in a password field"
+        return "", ""
 
     def _gate_user(self) -> None:
         if self.activity and self.activity.user_moved():

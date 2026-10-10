@@ -13,6 +13,9 @@ from .observation import Observation, Rect, make_thumb
 class Screen(Protocol):
     def observe(self, mask_rects: list[Rect] | None = None) -> Observation: ...
     def cursor(self) -> tuple[int, int]: ...
+    # Optional live queries (the loop uses them when present):
+    #   foreground() -> (app_exe, window_title[, hwnd])   right now, not at observe time
+    #   focused_element() -> Element | None          control with keyboard focus
 
 
 def mask_image(img: Image.Image, frame: Frame, rects: list[Rect]) -> None:
@@ -25,8 +28,10 @@ def mask_image(img: Image.Image, frame: Frame, rects: list[Rect]) -> None:
 
 
 class WindowsScreen:
-    def __init__(self, collect_elements: Callable | None = None):
+    def __init__(self, collect_elements: Callable | None = None,
+                 focused: Callable | None = None):
         self._collect = collect_elements   # uia.collect, optional (M4)
+        self._focused = focused            # uia.focused_element, optional
 
     def observe(self, mask_rects: list[Rect] | None = None) -> Observation:
         shots = capture.capture_all_screens()
@@ -60,7 +65,19 @@ class WindowsScreen:
             title=capture.foreground_title(),
             image_b64=base64.b64encode(buf.getvalue()).decode("ascii"),
             thumb=make_thumb(img), elements=elements,
-            elements_text=elements_text)
+            elements_text=elements_text, hwnd=capture.foreground_hwnd())
 
     def cursor(self) -> tuple[int, int]:
         return capture.cursor_position()
+
+    def foreground(self) -> tuple[str, str, int]:
+        return (capture.foreground_app(), capture.foreground_title(),
+                capture.foreground_hwnd())
+
+    def focused_element(self):
+        if not self._focused:
+            return None
+        try:
+            return self._focused()
+        except Exception:
+            return None

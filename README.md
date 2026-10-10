@@ -15,7 +15,7 @@ Built as my own version of [Clicky Windows](https://github.com/AbhishekVulla/cli
 
 You are working in some app. You hit a wall. You hold `Ctrl+Alt+Space`, ask a question out loud, release. A couple of seconds later you hear the answer, and an arrow lands on the exact button or menu item you need.
 
-Arrow never touches your mouse or keyboard. It shows you where to go, you do the clicking, and you come out of it actually knowing the app.
+In teach mode (the default), Arrow never touches your mouse or keyboard. It shows you where to go, you do the clicking, and you come out of it actually knowing the app. (The separate, opt-in [agent mode](docs/AGENT.md) can click and type for you, with approvals and a panic key.)
 
 Extras on top of the basic loop:
 
@@ -91,7 +91,7 @@ pip install -r requirements-dev.txt
 pytest -q
 ```
 
-58 tests cover the sentence streamer, point-tag parsing, per-monitor point routing, memory, KB, provider selection, the hotkey state machine, and the STT/TTS pipeline (mocked). CI runs them on every push.
+The test suite covers the sentence streamer, point-tag parsing, per-monitor point routing, memory, KB, provider selection, the hotkey state machine, the STT/TTS pipeline (mocked), and the agent loop with its safety gates (all with fakes: no network, screen, or mouse). CI runs them on every push.
 
 ## Privacy
 

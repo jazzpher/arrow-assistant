@@ -135,6 +135,16 @@ def foreground_app() -> str:
         return "unknown"
 
 
+def foreground_hwnd() -> int:
+    """Handle of the focused top-level window (Windows), else 0."""
+    if sys.platform != "win32":
+        return 0
+    try:
+        return int(ctypes.windll.user32.GetForegroundWindow() or 0)
+    except Exception:
+        return 0
+
+
 def foreground_title() -> str:
     """Title text of the focused window (Windows), else ''."""
     if sys.platform != "win32":

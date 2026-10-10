@@ -9,7 +9,7 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from arrow_assistant import ai, capture, stt, tts
-from arrow_assistant.points import Point, SpeechFilter
+from arrow_assistant.points import Point, SpeechFilter, parse_points
 from arrow_assistant.sentences import SentenceStreamer
 
 
@@ -217,3 +217,77 @@ def test_pipeline_streams_arrow_early_and_never_speaks_tag(monkeypatch):
     # the arrow is emitted mid-stream, before the last sentence is spoken
     assert order.index("arrow") < len(order) - 1
     assert "POINT" not in a.memory.rec[2]
+
+
+# -- second review ---------------------------------------------------------------
+def test_malformed_or_lowercase_tags_are_never_spoken():
+    spoken, pts = _run(["Click Save. [POINT:10,20]", " Ok."])
+    assert spoken == ["Click Save.", "Ok."] and pts == []
+    spoken, pts = _run(["Click Save. [poi", "nt:10,20:Save] Ok."])
+    assert spoken == ["Click Save.", "Ok."] and pts == [Point(10, 20, "Save")]
+    s, p = parse_points("Try [point:1,2:x] and [POINT:abc]")
+    assert "POINT" not in s.upper() and p == [Point(1, 2, "x")]
+
+
+def test_superseded_pipeline_does_not_clobber_newer_speaker(monkeypatch):
+    """An old answer that finishes late must not drop the reference to the
+    newer answer's speaker (or the newer one can never be interrupted), and
+    must not flip the tray back to idle while the newer one is thinking."""
+    pytest.importorskip("PyQt6.QtWidgets")
+    from PIL import Image
+    from arrow_assistant import app as app_mod
+
+    a = app_mod.ArrowApp.__new__(app_mod.ArrowApp)
+    statuses = []
+    gate, streaming = threading.Event(), threading.Event()
+
+    class Sp:
+        def start(self): pass
+        def say(self, s): pass
+        def finish(self): pass
+        def stop(self): pass
+        def wait(self): pass
+
+    class Sig:
+        def __init__(self, sink=None): self.sink = sink
+        def emit(self, v=None):
+            if self.sink is not None:
+                self.sink.append(v)
+
+    class Mem:
+        def recall(self, app): return ""
+        def record(self, *a): pass
+
+    def slow_stream(*a, **k):
+        streaming.set()
+        gate.wait(5)            # network is slow...
+        yield "Late answer."
+
+    monkeypatch.setattr(app_mod, "Speaker", Sp)
+    monkeypatch.setattr(app_mod, "transcribe", lambda *a: "q")
+    monkeypatch.setattr(app_mod.config, "get_key", lambda n: None)
+    monkeypatch.setattr(app_mod.capture, "foreground_app", lambda: "x.exe")
+    mon = {"left": 0, "top": 0, "width": 100, "height": 100}
+    monkeypatch.setattr(app_mod.capture, "primary_shot",
+                        lambda: (mon, Image.new("RGB", (100, 100))))
+    monkeypatch.setattr(app_mod.kb, "lookup", lambda app: None)
+    monkeypatch.setattr(app_mod.ai, "stream_answer", slow_stream)
+    a.provider = object()
+    a.stt_provider = "groq"
+    a.memory = Mem()
+    a.show_points = Sig()
+    a.error = Sig()
+    a.status = Sig(statuses)
+    a._speaker = None
+
+    old_cancel = threading.Event()
+    t = threading.Thread(target=a._pipeline, args=(b"WAV", old_cancel))
+    t.start()
+    assert streaming.wait(3)
+    old_cancel.set()            # user asked again...
+    newer = Sp()
+    a._speaker = newer          # ...and the newer answer is already speaking
+    gate.set()
+    t.join(3)
+    assert a._speaker is newer
+    assert "idle" not in statuses

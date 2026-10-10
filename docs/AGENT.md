@@ -43,6 +43,11 @@ emails, documents and notifications that are visible still get uploaded.
 - **Never does**: type into password/PIN/OTP/card fields, type in banking windows, Ctrl+Alt+Del, lock the PC,
   touch password managers, Windows Security, UAC, registry editor, or click its own HUD.
 - **Sensitive windows are never screenshotted** to a model; the task stops until you close them.
+- **Typing follows the real keyboard focus.** Right before every type/key action the agent re-checks the
+  focused window (if it changed since the screenshot, it re-plans) and asks UI Automation which field has
+  focus (a password field is blocked even if focus got there via Tab).
+- **`open_app` only types into the Start menu.** If Start does not open, or loses focus before Enter, the
+  action is aborted, so the app name and Enter never land in a chat or document.
 - On-screen text is treated as data, not instructions (prompt-injection defense), and a send/delete
   button still needs your approval even if a web page tells the agent to press it.
 - If the screen changes while you are deciding, the agent re-plans instead of clicking a stale spot.

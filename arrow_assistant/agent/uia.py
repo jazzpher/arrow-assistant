@@ -145,3 +145,24 @@ def collect_foreground(frame: Frame) -> list[Element]:
     if root is None:
         return []
     return filter_and_number(walk_controls(root), frame)
+
+
+def focused_element() -> Element | None:
+    """The control that has keyboard focus RIGHT NOW (Windows only).
+
+    Typing goes wherever focus is, not to the element the agent clicked
+    last; focus can move via Tab, an app's own autofocus, or a popup. So
+    the password guard asks UIA directly just before typing.
+    """
+    import uiautomation as auto
+    c = auto.GetFocusedControl()
+    if c is None:
+        return None
+    try:
+        r = c.BoundingRectangle
+        rect = (int(r.left), int(r.top), int(r.right), int(r.bottom))
+    except Exception:
+        rect = (0, 0, 0, 0)
+    return Element(0, (c.Name or "").strip()[:60], _role(c.ControlTypeName or ""), rect,
+                   bool(getattr(c, "IsEnabled", True)),
+                   bool(getattr(c, "IsPassword", False)))

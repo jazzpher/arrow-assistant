@@ -43,6 +43,7 @@ class Observation:
     thumb: bytes = b""
     elements: list[Element] = field(default_factory=list)
     elements_text: str = ""
+    hwnd: int = 0                  # focused window at observe time (0 = unknown)
 
     def element_by_id(self, eid: int) -> Element | None:
         for e in self.elements:
