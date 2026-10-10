@@ -110,6 +110,23 @@ Notable details (credit to Clicky Windows for pioneering these):
 - **Click-through overlay.** One transparent QWidget per physical monitor (mixed-DPI safe), made click-through with Win32 layered-window flags applied after `show()`.
 - **Prefetch double-buffer.** The next sentence's audio is synthesized while the current one is still playing, so gaps stay near zero.
 
+## Pointing troubleshooting
+
+The overlay is shown only when the model locates a visible target and emits
+`[POINT:x,y:label]`. It clears after six seconds; voice-only answers may have
+no target. Ask for a specific visible menu or word and watch during the reply.
+The app captures the monitor containing your mouse pointer.
+
+Teach-mode metadata in `Documents/Arrow Memory/arrow.log` now records
+`teach points: parsed=... invalid=... incomplete=...` plus image size,
+monitor origin, and scale. It does not record model text, screenshots, or keys.
+`parsed=0 invalid=0 incomplete=0` means no usable point tag was found;
+nonzero invalid/incomplete counts mean the model's tags were malformed or cut
+short. A positive parsed count means points were sent to the overlay, not
+proof they were visibly drawn. Check terminal errors and monitor/scaling if
+points were parsed but nothing appeared. Prompt changes do not guarantee
+that every model will locate every target correctly.
+
 ## Development
 
 ```bash

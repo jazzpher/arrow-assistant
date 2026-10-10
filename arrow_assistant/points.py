@@ -10,11 +10,13 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-POINT_RE = re.compile(r"\[POINT:\s*(-?\d+)\s*,\s*(-?\d+)\s*:\s*([^\]\n]{1,80})\]", re.I)
+_NUMBER = r"-?\d+(?:\.\d+)?"
+POINT_RE = re.compile(
+    rf"\[\s*POINT\s*:\s*({_NUMBER})\s*,\s*({_NUMBER})\s*:\s*([^\]\n]{{1,80}})\]", re.I)
 # Anything that looks like a POINT tag but is not a valid one (no label,
 # bad numbers, ...). It never becomes an arrow, but it must never be read
 # out loud either.
-JUNK_TAG_RE = re.compile(r"\[POINT:[^\]\n]{0,120}\]", re.I)
+JUNK_TAG_RE = re.compile(r"\[\s*POINT\s*:[^\]\n]{0,120}\]", re.I)
 
 MAX_POINTS = 3  # never clutter the screen with more arrows than this
 
@@ -28,7 +30,7 @@ class Point:
 
 def parse_points(text: str) -> tuple[str, list[Point]]:
     """Split model output into (spoken_text, points). Tags are removed."""
-    points = [Point(int(m.group(1)), int(m.group(2)), m.group(3).strip())
+    points = [Point(round(float(m.group(1))), round(float(m.group(2))), m.group(3).strip())
               for m in POINT_RE.finditer(text)]
     spoken = JUNK_TAG_RE.sub("", POINT_RE.sub("", text))
     spoken = re.sub(r"\n{3,}", "\n\n", spoken).strip()
@@ -51,6 +53,8 @@ class SpeechFilter:
     def __init__(self) -> None:
         self._buf = ""
         self._count = 0
+        self.invalid_tags = 0
+        self.incomplete_tags = 0
 
     def feed(self, chunk: str) -> tuple[str, list[Point]]:
         self._buf += chunk
@@ -67,16 +71,17 @@ class SpeechFilter:
             m = POINT_RE.match(rest)
             junk = None if m else JUNK_TAG_RE.match(rest)
             if junk:                  # malformed tag: drop it, no arrow
+                self.invalid_tags += 1
                 self._buf = rest[junk.end():]
                 continue
             if m:
                 if self._count < MAX_POINTS:
-                    points.append(Point(int(m.group(1)), int(m.group(2)),
+                    points.append(Point(round(float(m.group(1))), round(float(m.group(2))),
                                         m.group(3).strip()))
                     self._count += 1
                 self._buf = rest[m.end():]
                 continue
-            head = rest.upper()
+            head = re.sub(r"\s+", "", rest).upper()
             could_grow = (
                 _TAG_HEAD.startswith(head)
                 or (head.startswith(_TAG_HEAD) and "]" not in rest
@@ -91,8 +96,11 @@ class SpeechFilter:
     def flush(self) -> str:
         """End of stream: drop an unfinished tag, keep any other text."""
         rest, self._buf = self._buf, ""
-        head = rest.upper()
-        return "" if head.startswith(_TAG_HEAD) or _TAG_HEAD.startswith(head) else rest
+        head = re.sub(r"\s+", "", rest).upper()
+        if rest and (head.startswith(_TAG_HEAD) or _TAG_HEAD.startswith(head)):
+            self.incomplete_tags += 1
+            return ""
+        return rest
 
 
 def route_points(points: list[Point], monitors: list[dict]) -> dict[int, list[Point]]:

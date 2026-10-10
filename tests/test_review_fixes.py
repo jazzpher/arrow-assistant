@@ -200,7 +200,7 @@ def test_pipeline_streams_arrow_early_and_never_speaks_tag(monkeypatch):
     monkeypatch.setattr(app_mod.capture, "primary_shot",
                         lambda: (mon, Image.new("RGB", (1000, 500))))
     monkeypatch.setattr(app_mod.kb, "lookup", lambda app: None)
-    chunks = ["Click File. Then ", "pick Export. [POI", "NT:99999,20:Export]", " Done."]
+    chunks = ["Click File. Then ", "pick Export. [ POI", "NT : 99999.3,20.2:Export]", " Done."]
     monkeypatch.setattr(app_mod.ai, "stream_answer",
                         lambda *a, **k: iter(chunks))
     a.provider = object()
@@ -209,7 +209,10 @@ def test_pipeline_streams_arrow_early_and_never_speaks_tag(monkeypatch):
     a.show_points = Sig(shown)
     a.status = a.error = Sig()
     a._speaker = None
+    diagnostics = []
+    monkeypatch.setattr(app_mod, "log_diagnostic", diagnostics.append)
     a._pipeline(b"WAV", threading.Event())
+    assert diagnostics == ["teach points: parsed=1 invalid=0 incomplete=0 image=1000x500 monitor=0,0 scale=1.0000"]
     assert all("POINT" not in s and "[" not in s for s in said)
     assert said == ["Click File.", "Then pick Export.", "Done."]
     assert len(shown) == 1 and shown[0][0].label == "Export"

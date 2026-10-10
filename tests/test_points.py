@@ -45,3 +45,36 @@ def test_route_out_of_bounds_clamps_to_first():
     mons = [{"left": 0, "top": 0, "width": 800, "height": 600}]
     routed = route_points([Point(9999, 9999, "far")], mons)
     assert list(routed) == [0]
+
+
+# Synthetic representative variants, not captured private model responses.
+def test_decimal_and_spaced_tags():
+    spoken, pts = parse_points("[ POINT : 120.4, 80.7 : File ] File menu.")
+    assert pts == [Point(120, 81, "File")]
+    assert spoken == "File menu."
+
+
+def test_unsafe_coordinate_formats_are_not_guessed():
+    for text in ["[POINT:12%,80:File]", "[POINT:NaN,80:File]", "[POINT:120,Infinity:File]"]:
+        assert parse_points(text) == ("", [])
+
+
+def test_variant_streamed_at_every_boundary():
+    from arrow_assistant.points import SpeechFilter
+    text = "[ POINT : 120.4, 80.7 : File ] This is File."
+    for cut in range(1, len(text)):
+        f = SpeechFilter()
+        t1, p1 = f.feed(text[:cut])
+        t2, p2 = f.feed(text[cut:])
+        assert p1 + p2 == [Point(120, 81, "File")]
+        assert (t1 + t2 + f.flush()).strip() == "This is File."
+
+
+def test_filter_diagnostic_counts():
+    from arrow_assistant.points import SpeechFilter
+    f = SpeechFilter()
+    text, pts = f.feed("[POINT:abc] [POINT:120,80:File] [ POINT : 5,6:")
+    f.flush()
+    assert pts == [Point(120, 80, "File")]
+    assert f.invalid_tags == 1
+    assert f.incomplete_tags == 1

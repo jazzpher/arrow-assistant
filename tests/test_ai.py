@@ -128,3 +128,28 @@ def test_openai_compat_error_has_no_key(monkeypatch):
         assert "SECRET123" not in str(exc)
     else:
         raise AssertionError("expected an error")
+
+
+def test_pointing_prompt_requires_early_literal_pixel_tags():
+    assert "Put the tag FIRST" in ai.SYSTEM_PROMPT
+    assert "not percentages" in ai.SYSTEM_PROMPT
+    assert "never invent a location" in ai.SYSTEM_PROMPT
+
+
+def test_mock_gemini_point_variant_reaches_filter(monkeypatch):
+    from arrow_assistant.points import SpeechFilter, Point
+    # Synthetic output: not a recorded provider response.
+    chunks = ["[ PO", "INT : 120.2,80.7:File ]", " Ito ang File."]
+    lines = ["data: " + json.dumps({"candidates": [{"content": {
+        "parts": [{"text": t}]}}]}) for t in chunks]
+    monkeypatch.setattr(ai.requests, "post", lambda *a, **k: _FakeResp(lines))
+    f = SpeechFilter()
+    points, speech = [], []
+    for chunk in ai.stream_answer(LLMProvider("gemini", "key", "model"),
+                                  "ituro ang File", "notepad.exe", "", None, "AAAA"):
+        text, pts = f.feed(chunk)
+        points.extend(pts)
+        speech.append(text)
+    speech.append(f.flush())
+    assert points == [Point(120, 81, "File")]
+    assert "POINT" not in "".join(speech)
