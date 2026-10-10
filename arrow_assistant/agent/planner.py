@@ -171,11 +171,10 @@ class ProviderChain:
     def _call(self, prov: LLMProvider, system: str, parts: list[dict],
               max_tokens: int) -> str:
         if prov.name == "gemini":
-            from ..ai import _to_gemini_contents
-            gen = {"maxOutputTokens": max_tokens, "temperature": 0.2,
-                   "responseMimeType": "application/json"}
-            if "2.5" in prov.model:
-                gen["thinkingConfig"] = {"thinkingBudget": 0}
+            from ..ai import _to_gemini_contents, gemini_generation_config
+            gen = gemini_generation_config(prov.model, max_tokens, 0.2,
+                                           disable_legacy_thinking=True)
+            gen["responseMimeType"] = "application/json"
             url = ("https://generativelanguage.googleapis.com/v1beta/models/"
                    f"{prov.model}:generateContent")
             req = dict(url=url, headers={"x-goog-api-key": prov.api_key},
