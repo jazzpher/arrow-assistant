@@ -12,10 +12,11 @@ from ..hotkey import ComboTracker, parse_hotkey, token_from_pynput
 class MultiCombo:
     """Pure: dispatch press/release tokens to several combos."""
 
-    def __init__(self, bindings: dict[str, Callable[[], None]]):
-        self._trackers = [
-            ComboTracker(parse_hotkey(combo), fn, lambda: None)
-            for combo, fn in bindings.items()]
+    def __init__(self, bindings: dict):
+        self._trackers = []
+        for combo, fn in bindings.items():
+            down, up = fn if isinstance(fn, tuple) else (fn, lambda: None)
+            self._trackers.append(ComboTracker(parse_hotkey(combo), down, up))
 
     def press(self, token: str) -> None:
         for t in self._trackers:
@@ -27,7 +28,7 @@ class MultiCombo:
 
 
 class AgentHotkeys:
-    def __init__(self, bindings: dict[str, Callable[[], None]]):
+    def __init__(self, bindings: dict):
         from pynput import keyboard
         self._multi = MultiCombo(bindings)
         self._listener = keyboard.Listener(

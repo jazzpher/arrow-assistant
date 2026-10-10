@@ -35,6 +35,10 @@ The original Clicky Windows runs on paid APIs (Anthropic + AssemblyAI + Cartesia
 
 Fully offline mode (local whisper + pyttsx3) works with **zero API keys**, it is just slower.
 
+## Agent mode (new)
+
+Arrow can also *do* short tasks for you, with approval and a panic key. See [docs/AGENT.md](docs/AGENT.md).
+
 ## Setup
 
 1. Install Python 3.11+ on Windows.

@@ -3,6 +3,8 @@
 PyQt6>=6.7.0            # Transparent click-through overlay + tray
 pynput>=1.7.7           # Observe-only global hotkey (suppress=False, never blocks typing)
 mss>=9.0.1              # Multi-monitor screen capture, DPI-aware
+pyautogui>=0.9.54        # Agent mode: mouse control (failsafe corner abort)
+uiautomation>=2.0.20; sys_platform == "win32"   # Agent mode: numbered-element grounding
 requests>=2.31.0        # LLM/STT/TTS HTTP calls (no heavy SDK deps)
 Pillow>=10.4.0          # Screenshot resize + base64
 numpy>=1.26.0           # Audio buffer manipulation
