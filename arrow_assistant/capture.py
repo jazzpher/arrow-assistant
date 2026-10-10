@@ -112,3 +112,42 @@ def foreground_app() -> str:
         return os.path.basename(buf.value).lower() or "unknown"
     except Exception:
         return "unknown"
+
+
+def foreground_title() -> str:
+    """Title text of the focused window (Windows), else ''."""
+    if sys.platform != "win32":
+        return ""
+    try:
+        hwnd = ctypes.windll.user32.GetForegroundWindow()
+        n = ctypes.windll.user32.GetWindowTextLengthW(hwnd)
+        buf = ctypes.create_unicode_buffer(n + 1)
+        ctypes.windll.user32.GetWindowTextW(hwnd, buf, n + 1)
+        return buf.value
+    except Exception:
+        return ""
+
+
+def foreground_rect() -> tuple[int, int, int, int] | None:
+    """(left, top, right, bottom) of the focused window, or None."""
+    if sys.platform != "win32":
+        return None
+    try:
+        class RECT(ctypes.Structure):
+            _fields_ = [("l", ctypes.c_long), ("t", ctypes.c_long),
+                        ("r", ctypes.c_long), ("b", ctypes.c_long)]
+        rc = RECT()
+        hwnd = ctypes.windll.user32.GetForegroundWindow()
+        if not ctypes.windll.user32.GetWindowRect(hwnd, ctypes.byref(rc)):
+            return None
+        return rc.l, rc.t, rc.r, rc.b
+    except Exception:
+        return None
+
+
+def monitor_for_point(shots, x: int, y: int):
+    for mon, img in shots:
+        if mon["left"] <= x < mon["left"] + mon["width"] and \
+           mon["top"] <= y < mon["top"] + mon["height"]:
+            return mon, img
+    return shots[0]
