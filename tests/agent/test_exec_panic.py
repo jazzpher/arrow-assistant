@@ -31,10 +31,18 @@ class FakeBackend:
     def drag(self, s, e): self.calls.append(("drag", s, e))
 
 
-def ex(panic=None, backend=None, sleeps=None):
+def start_opens_on_win(b):
+    """Fake foreground: the Start menu is focused once Win was pressed."""
+    return lambda: ("searchhost.exe" if ("hotkey", ("win",)) in b.calls else "notepad.exe")
+
+
+def ex(panic=None, backend=None, sleeps=None, foreground=None):
     panic = panic or PanicSwitch()
     b = backend or FakeBackend()
-    return RealExecutor(b, panic, sleep=(sleeps.append if sleeps is not None else lambda s: None)), b, panic
+    executor = RealExecutor(b, panic, sleep=(sleeps.append if sleeps is not None else lambda s: None),
+                            foreground=foreground or start_opens_on_win(b))
+    executor.set_keyboard_guard(lambda: None)  # fake verified focus
+    return executor, b, panic
 
 
 def A(raw):
@@ -114,7 +122,7 @@ def test_keys_scroll_drag_wait_open_app():
     e.perform(A('{"action":"open_app","app":"notepad"}'), None, None)
     assert b.calls == [("hotkey", ("ctrl", "s")), ("scroll", 3, (5, 5)),
                        ("drag", (1, 1), (9, 9)), ("hotkey", ("win",)),
-                       ("type", "notepad"), ("hotkey", ("enter",))]
+                      ] + [("type", ch) for ch in "notepad"] + [("hotkey", ("enter",))]
     assert sleeps[0] == 2
 
 

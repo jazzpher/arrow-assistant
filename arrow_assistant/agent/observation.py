@@ -21,6 +21,7 @@ class Element:
     rect: Rect                     # screen px
     enabled: bool = True
     password: bool = False
+    runtime_id: tuple[int, ...] = ()  # stable UIA identity when supplied
 
     @property
     def center(self) -> Point:
@@ -43,6 +44,7 @@ class Observation:
     thumb: bytes = b""
     elements: list[Element] = field(default_factory=list)
     elements_text: str = ""
+    hwnd: int = 0                  # focused window at observe time (0 = unknown)
 
     def element_by_id(self, eid: int) -> Element | None:
         for e in self.elements:

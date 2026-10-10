@@ -14,7 +14,28 @@ from .actions import POINTER_KINDS, Action
 from .panic import PanicStop, PanicSwitch
 
 Point = tuple[int, int]
-TYPE_CHUNK = 12
+TYPE_CHUNK = 1  # recheck focus before each character, including Tab/Enter
+
+# Processes that own the Start menu / Start search box (Windows 10 and 11).
+START_HOSTS = frozenset({
+    "startmenuexperiencehost.exe",   # Start menu (10 + 11)
+    "searchhost.exe",                # Start search (11)
+    "searchapp.exe",                 # Start search (10, 20H1+)
+    "searchui.exe",                  # Start search (older 10)
+})
+START_WAIT_S = 2.0
+
+
+class ActionAborted(RuntimeError):
+    """Stop remaining input when safety cannot be verified.
+
+    Earlier characters may already have been typed; never claim rollback.
+    """
+
+
+def _default_foreground() -> str:
+    from .. import capture
+    return capture.foreground_app()
 
 
 class Backend(Protocol):
@@ -76,10 +97,66 @@ _BUTTONS = {"click": ("left", 1), "double_click": ("left", 2),
 
 class RealExecutor:
     def __init__(self, backend: Backend, panic: PanicSwitch,
-                 sleep: Callable[[float], None] = time.sleep):
+                 sleep: Callable[[float], None] = time.sleep,
+                 foreground: Callable[[], str] | None = None):
         self._b = backend
         self._panic = panic
         self._sleep = sleep
+        self._fg = foreground or _default_foreground
+        self._keyboard_check = None
+
+    def set_keyboard_guard(self, check: Callable[[], None]) -> None:
+        """Bind a live guard for the current action, supplied by AgentLoop."""
+        self._keyboard_check = check
+
+    def _check_keyboard(self) -> None:
+        if self._keyboard_check is None:
+            raise ActionAborted("keyboard focus has not been verified")
+        self._keyboard_check()
+
+    def _foreground(self) -> str:
+        try:
+            return (self._fg() or "").lower()
+        except Exception:  # noqa: BLE001
+            return ""
+
+    def _wait_for_start(self, timeout_s: float = START_WAIT_S) -> bool:
+        waited = 0.0
+        while True:
+            if self._foreground() in START_HOSTS:
+                return True
+            if waited >= timeout_s:
+                return False
+            self._sleep(0.2)
+            waited += 0.2
+            self._panic.check()
+
+    def _open_app(self, app: str) -> None:
+        """Win -> type name -> Enter, but ONLY into the Start menu.
+
+        Without these checks a Start menu that did not open (or was already
+        open and got toggled shut by Win) means the app name and Enter go to
+        the focused window - in a chat app that sends a message.
+        """
+        if self._foreground() not in START_HOSTS:
+            self._b.hotkey("win")
+            if not self._wait_for_start():
+                raise ActionAborted(
+                    f"Start menu did not open (focused: {self._foreground() or 'unknown'}); "
+                    "typed nothing")
+        self._panic.check()
+        for ch in app:
+            self._panic.check()
+            if self._foreground() not in START_HOSTS:
+                raise ActionAborted("Start menu lost focus; stopped typing app name")
+            self._b.type_text(ch)
+        self._sleep(0.9)
+        self._panic.check()
+        if self._foreground() not in START_HOSTS:
+            raise ActionAborted(
+                f"Start menu lost focus while typing (focused: {self._foreground() or 'unknown'}); "
+                "did not press Enter")
+        self._b.hotkey("enter")
 
     def perform(self, action: Action, pt: Point | None,
                 pt2: Point | None) -> Point | None:
@@ -95,9 +172,11 @@ class RealExecutor:
             text = action.text or ""
             for i in range(0, len(text), TYPE_CHUNK):
                 self._panic.check()   # stop mid-sentence if the user hits panic
+                self._check_keyboard()
                 self._b.type_text(text[i:i + TYPE_CHUNK])
             return None
         if k == "key":
+            self._check_keyboard()
             self._b.hotkey(*action.keys)
             return None
         if k == "scroll":
@@ -112,13 +191,7 @@ class RealExecutor:
             self._sleep(action.seconds)
             return None
         if k == "open_app":
-            self._b.hotkey("win")
-            self._sleep(0.7)
-            self._panic.check()
-            self._b.type_text(action.app or "")
-            self._sleep(0.9)
-            self._panic.check()
-            self._b.hotkey("enter")
+            self._open_app(action.app or "")
             return None
         raise ValueError(f"not executable: {k}")
 

@@ -19,6 +19,27 @@ from ..points import Point
 from .approval import APPROVE, SKIP, STOP, ApprovalRequest, QueueApprover
 
 MAX_LINES = 6
+HUD_MARGIN_PX = 8   # extra physical px around the HUD that the agent treats as "the HUD"
+
+
+def logical_to_physical_rect(left: float, top: float, right: float, bottom: float,
+                             origin_x: float, origin_y: float, dpr: float,
+                             margin: int = HUD_MARGIN_PX) -> tuple[int, int, int, int]:
+    """Qt widget geometry (device-independent px) -> physical desktop px.
+
+    The agent's screenshots, UIA rects and clicks are all physical pixels,
+    while Qt6 places widgets in logical pixels. Qt keeps each screen's
+    native origin and scales only the offset from it, so the offset is
+    multiplied by the devicePixelRatio. Without this, at 125%/150% scaling
+    the HUD mask and the "never click the HUD" guard cover the wrong area.
+    """
+    d = dpr if dpr and dpr > 0 else 1.0
+
+    def px(v: float, o: float) -> int:
+        return round(o + (v - o) * d)
+
+    return (px(left, origin_x) - margin, px(top, origin_y) - margin,
+            px(right, origin_x) + margin, px(bottom, origin_y) + margin)
 
 
 class AgentHUD(QWidget):
@@ -114,7 +135,13 @@ class QtAgentUI(QObject):
         self.approver = approver
         self._on_stop = on_stop
         self._speak = speak
-        self._screen = app.primaryScreen().geometry()
+        primary = app.primaryScreen()
+        self._screen = primary.geometry()
+        self._dpr = primary.devicePixelRatio() or 1.0
+        # Physical-pixel rects of the visible HUD. Written on the GUI thread,
+        # read by the agent worker thread (a list swap is atomic in CPython,
+        # and the worker never touches the widget itself).
+        self._rects: list[tuple[int, int, int, int]] = []
         self.hud.decided.connect(self._decided)
         self._status.connect(lambda t: (self.hud.add_line(t), self._show()))
         self._step.connect(self._on_step)
@@ -122,10 +149,10 @@ class QtAgentUI(QObject):
         self._say.connect(self._on_say)
         self._finished.connect(self._on_finished)
         self._request.connect(self._on_request)
-        self._hide.connect(self.hud.hide)
+        self._hide.connect(self._hide_hud)
         self._hide_timer = QTimer()
         self._hide_timer.setSingleShot(True)
-        self._hide_timer.timeout.connect(self.hud.hide)
+        self._hide_timer.timeout.connect(self._hide_hud)
 
     def _show(self) -> None:
         self._hide_timer.stop()
@@ -133,6 +160,21 @@ class QtAgentUI(QObject):
             self.hud.show()
             self.hud.apply_click_through_safety()
         self.hud.place(self._screen)
+        self._update_rects()
+
+    def _hide_hud(self) -> None:
+        self.hud.hide()
+        self._rects = []
+
+    def _update_rects(self) -> None:
+        g = self.hud.frameGeometry()
+        self._rects = [logical_to_physical_rect(
+            g.left(), g.top(), g.left() + g.width(), g.top() + g.height(),
+            self._screen.x(), self._screen.y(), self._dpr)]
+
+    def hud_rects(self) -> list[tuple[int, int, int, int]]:
+        """Screen rects (physical px) the agent must mask and never click."""
+        return list(self._rects)
 
     # AgentUI (any thread) --------------------------------------------------
     def status(self, text): self._status.emit(text)

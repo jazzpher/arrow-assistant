@@ -155,6 +155,7 @@ class ArrowApp(QObject):
 
     # -- pipeline (worker thread) -------------------------------------------
     def _pipeline(self, wav: bytes, cancel: threading.Event) -> None:
+        speaker: Speaker | None = None
         try:
             if self.provider is None:
                 self._report("no LLM key configured - see README setup")
@@ -219,8 +220,13 @@ class ArrowApp(QObject):
         except Exception as exc:
             self._report(f"pipeline error: {exc}")
         finally:
-            self._speaker = None
-            self.status.emit("idle")
+            # Only clean up what this run owns: a newer question may already
+            # have installed its own speaker (and its own tray status) while
+            # this superseded run was still waiting on the network.
+            if speaker is not None and self._speaker is speaker:
+                self._speaker = None
+            if not cancel.is_set():
+                self.status.emit("idle")
 
     def _quit(self) -> None:
         self.hotkey.stop()

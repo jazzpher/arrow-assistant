@@ -35,14 +35,14 @@ class AgentStack:
 
     @staticmethod
     def _real_screen():
-        collect = None
+        collect = focused = None
         try:
             import uiautomation  # noqa: F401
-            from .uia import collect_foreground
-            collect = collect_foreground
+            from .uia import collect_foreground, focused_element
+            collect, focused = collect_foreground, focused_element
         except ImportError:
             pass   # no UIA: pixel coordinates only
-        return WindowsScreen(collect)
+        return WindowsScreen(collect, focused)
 
     def _make_loop(self) -> AgentLoop:
         scope = frozenset(a.strip().lower() for a in
