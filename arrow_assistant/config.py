@@ -14,9 +14,16 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
+def user_dir() -> str:
+    """Per-user folder for the installed app (%APPDATA%\\Arrow): .env, logs."""
+    base = os.environ.get("APPDATA") or os.path.join(os.path.expanduser("~"), ".config")
+    return os.path.join(base, "Arrow")
+
+
 try:
     from dotenv import load_dotenv
-    load_dotenv()
+    load_dotenv()                                       # .env in the current folder (dev)
+    load_dotenv(os.path.join(user_dir(), ".env"))       # installed app; never overrides
 except ImportError:  # dotenv is a nicety, not a requirement
     pass
 
@@ -85,6 +92,11 @@ def select_llm() -> LLMProvider | None:
 def select_stt() -> str:
     """Return 'groq' when a Groq key exists, else 'local'."""
     return "groq" if get_key("GROQ_API_KEY") else "local"
+
+
+def skip_setup() -> bool:
+    """ARROW_SKIP_SETUP=1: never show the first-run key window (tests, CI)."""
+    return os.environ.get("ARROW_SKIP_SETUP", "").strip().lower() in ("1", "true", "yes")
 
 
 def hotkey() -> str:
