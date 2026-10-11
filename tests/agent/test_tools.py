@@ -242,3 +242,61 @@ def test_loop_without_tools_rejects_tool_actions(tmp_path):
     res = mk(p, None).run("t")
     assert res.status == "done"
     assert "not available" in p.seen[1][0][0]["outcome"]
+
+
+# ---- safe PowerShell mode (default) ------------------------------------------
+
+from arrow_assistant.agent.tools import clean_env, ps_safe_problem  # noqa: E402
+
+
+@pytest.mark.parametrize("cmd", [
+    "Get-ChildItem",
+    "Get-ChildItem | Where-Object { $_.Length -gt 100 } | Select-Object Name",
+    "Get-Content notes.txt | Measure-Object -Line",
+    "Select-String -Path *.txt -Pattern 'gatas'",
+    "Get-Date",
+])
+def test_safe_mode_allows_read_only_commands(cmd):
+    assert ps_safe_problem(cmd) == ""
+
+
+@pytest.mark.parametrize("cmd", [
+    "Remove-Item a.txt", "Get-ChildItem C:\\Users", "Get-Content ..\\x",
+    "Get-ChildItem | ForEach-Object { Remove-Item $_ }", "Get-Content $env:USERPROFILE\\x",
+    "& calc.exe", "Get-Date > a.txt", "[System.IO.File]::Delete('a')",
+    "Invoke-WebRequest http://x", "Get-Content ~/x", "Get-ChildItem;Stop-Process -Name x",
+    "python -c 1", "Get-Content $(whoami)", "Set-Content a.txt hi", "Get-Process -ComputerName pc2",
+    "Get-ChildItem HKLM:\\Software", "Get-Content \\\\server\\share\\x",
+])
+def test_safe_mode_blocks_everything_else(cmd):
+    assert ps_safe_problem(cmd)
+
+
+def test_safe_mode_is_default_and_approve_mode_widens(tmp_path):
+    a = parse_action('{"action":"powershell","command":"New-Item -ItemType Directory out"}')
+    assert runner(tmp_path).assess(a).blocked
+    v = runner(tmp_path, ps_mode="approve").assess(a)
+    assert v.confirm and not v.blocked
+    # the blocklist still wins in approve mode
+    bad = parse_action('{"action":"powershell","command":"Remove-Item -Recurse out"}')
+    assert runner(tmp_path, ps_mode="approve").assess(bad).blocked
+
+
+def test_powershell_gets_constrained_language_and_no_secrets(tmp_path, monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "leak")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "leak")
+    monkeypatch.setenv("SOME_TOKEN", "leak")
+    monkeypatch.setenv("PATH", "/usr/bin")
+    seen = {}
+
+    def run(argv, **kw):
+        seen.update(argv=argv, **kw)
+        return subprocess.CompletedProcess(argv, 0, "ok", "")
+
+    runner(tmp_path, run=run, shell="pwsh").run(
+        parse_action('{"action":"powershell","command":"Get-Date"}'))
+    assert seen["argv"][-1].startswith("$ExecutionContext.SessionState.LanguageMode = 'ConstrainedLanguage'")
+    assert seen["argv"][-1].endswith("Get-Date")
+    env = seen["env"]
+    assert "GEMINI_API_KEY" not in env and "SOME_TOKEN" not in env and env["PATH"] == "/usr/bin"
+    assert "leak" not in clean_env().values()

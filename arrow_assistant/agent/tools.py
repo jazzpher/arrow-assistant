@@ -69,6 +69,55 @@ PS_BLOCKED = [
 ]
 
 
+# "safe" PowerShell mode (default): only these read-only commands, only
+# workspace paths, and ConstrainedLanguage. Writing goes through write_file.
+PS_SAFE_COMMANDS = frozenset("""
+get-childitem gci ls dir get-content gc cat type get-item gi get-itemproperty gp
+get-date get-location pwd get-process ps get-command gcm get-help help get-filehash
+get-volume get-psdrive get-culture get-timezone get-uptime get-host get-computerinfo
+test-path resolve-path join-path split-path select-object select where-object where ?
+foreach-object foreach % sort-object sort measure-object measure group-object group
+format-table ft format-list fl format-wide fw out-string convertto-json convertfrom-json
+convertto-csv convertfrom-csv convertto-html select-string sls compare-object diff
+write-output echo write-host get-unique tee-object-x hostname whoami ipconfig ping nslookup
+systeminfo tasklist where.exe findstr sort.exe
+""".split()) - {"tee-object-x"}
+PS_SAFE_FORBIDDEN = [
+    (re.compile(r"\$\(|@\(|`|\[\s*[a-z_.]+\s*\]\s*::", re.I), "subexpressions, escapes and .NET calls"),
+    (re.compile(r"(^|[\s;|{(])[&.]\s*[\"'$\w\\/]", re.I), "call/dot-source operators"),
+    (re.compile(r">|\b(out-file|set-content|add-content|new-item|copy-item|move-item|rename-item)\b", re.I),
+     "writing files (use write_file instead)"),
+    (re.compile(r"(^|[\s'\"(=,])([a-z]+:[\\/]|\\\\|~[\\/]?|\$env:|\$home\b|\$pshome\b|[a-z]+::)", re.I),
+     "paths outside the workspace"),
+    (re.compile(r"\.\.([\\/]|$|\s)"), "paths outside the workspace"),
+    (re.compile(r"-computername|-session\b|-credential", re.I), "remote targets"),
+]
+_PS_CMD_POS = re.compile(r"(?:^|[|;\n{(])\s*([^\s|;{}()]+)")
+_PS_PREFIX = "$ExecutionContext.SessionState.LanguageMode = 'ConstrainedLanguage'; "
+_SECRET_ENV = re.compile(r"(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|AUTH|COOKIE)", re.I)
+
+
+def ps_safe_problem(command: str) -> str:
+    """'' when a command fits the read-only allowlist, else why not."""
+    for rx, why in PS_SAFE_FORBIDDEN:
+        if rx.search(command):
+            return f"not allowed in safe PowerShell mode: {why}"
+    words = [w.strip().lower() for w in _PS_CMD_POS.findall(command)]
+    words = [w for w in words if w and not w.startswith(("$", "-", "'", '"')) and not w[0].isdigit()]
+    if not words:
+        return "no command found"
+    for w in words:
+        if w not in PS_SAFE_COMMANDS:
+            return (f"'{w}' is not on the safe PowerShell list (read-only commands only; "
+                    "use write_file to save files, or set ARROW_AGENT_PS_MODE=approve)")
+    return ""
+
+
+def clean_env() -> dict:
+    """The child gets everything except secrets (API keys stay with Arrow)."""
+    return {k: v for k, v in os.environ.items() if not _SECRET_ENV.search(k)}
+
+
 @dataclass(frozen=True)
 class ToolResult:
     ok: bool
@@ -126,7 +175,8 @@ class ToolRunner:
                  get: Callable = requests.get,
                  run: Callable = subprocess.run,
                  resolve: Callable = socket.getaddrinfo,
-                 shell: str | None = None):
+                 shell: str | None = None,
+                 ps_mode: str = "safe"):
         self.workspace = Path(workspace) if workspace else default_workspace()
         self.enabled = frozenset(enabled)
         self.dry_run = dry_run
@@ -134,6 +184,7 @@ class ToolRunner:
         self._run = run
         self._resolve = resolve
         self._shell = shell
+        self.ps_mode = ps_mode if ps_mode in ("safe", "approve") else "safe"
 
     # -- what the prompt is told ---------------------------------------------
     def describe_for_prompt(self) -> str:
@@ -149,7 +200,11 @@ class ToolRunner:
                       '  {"action":"write_file","path":"notes.txt","content":"..."}',
                       "  Paths are relative to the workspace and cannot leave it."]
         if "powershell" in self.enabled:
-            lines += ['  {"action":"powershell","command":"Get-ChildItem"}   (always asks the user; runs in the workspace)']
+            extra = (" Safe mode: read-only commands only (Get-ChildItem, Get-Content, Select-String,"
+                     " Measure-Object, ...), workspace paths only, no file writes."
+                     if self.ps_mode == "safe" else "")
+            lines += ['  {"action":"powershell","command":"Get-ChildItem"}   (always asks the user; runs in the workspace)'
+                      + extra]
         lines.append("Prefer a tool over clicking when it gets the answer faster (searching, reading, saving notes).")
         return "\n".join(lines)
 
@@ -177,6 +232,10 @@ class ToolRunner:
             for rx, why in PS_BLOCKED:
                 if rx.search(action.command or ""):
                     return Assessment("block", (f"PowerShell command {why}",))
+            if self.ps_mode == "safe":
+                problem = ps_safe_problem(action.command or "")
+                if problem:
+                    return Assessment("block", (problem,))
             confirm.append("runs a PowerShell command on your PC")
         if action.risk_hint == "high":
             confirm.append("the model itself marked this as high risk")
@@ -305,9 +364,10 @@ class ToolRunner:
             return ToolResult(False, "PowerShell is not available on this PC")
         self.workspace.mkdir(parents=True, exist_ok=True)
         try:
-            proc = self._run([exe, "-NoProfile", "-NonInteractive", "-Command", a.command],
+            proc = self._run([exe, "-NoProfile", "-NonInteractive", "-Command",
+                              _PS_PREFIX + a.command],
                              cwd=str(self.workspace), capture_output=True, text=True,
-                             timeout=PS_TIMEOUT_S, stdin=subprocess.DEVNULL)
+                             timeout=PS_TIMEOUT_S, stdin=subprocess.DEVNULL, env=clean_env())
         except subprocess.TimeoutExpired:
             return ToolResult(False, f"timed out after {PS_TIMEOUT_S}s")
         out = (proc.stdout or "") + (("\n[stderr]\n" + proc.stderr) if proc.stderr else "")
@@ -317,4 +377,5 @@ class ToolRunner:
 
 def from_config(dry_run: bool = False) -> ToolRunner:
     from .. import config
-    return ToolRunner(config.agent_workspace(), config.agent_tools(), dry_run=dry_run)
+    return ToolRunner(config.agent_workspace(), config.agent_tools(), dry_run=dry_run,
+                      ps_mode=config.agent_ps_mode())

@@ -33,17 +33,25 @@ than driving the screen (still one model call per step).
 | `web_fetch` | reads a **public** web page as plain text (private/LAN addresses are blocked, also after redirects) | no |
 | `list_files`, `read_file` | only inside the agent workspace | no |
 | `write_file` | only inside the agent workspace | in `step` mode, and always when it overwrites a file |
-| `powershell` | one command, run in the workspace, 60 s timeout | **always**, in every mode |
+| `powershell` | one command, run in the workspace, 60 s timeout, read-only by default | **always**, in every mode |
 
 - Workspace: `ARROW_AGENT_WORKSPACE` (default `Documents/Arrow Workspace`). Paths are resolved in code
   and cannot leave it; absolute paths, `..` escapes and secret-looking files (`.env`, keys, `*.kdbx`,
   cookies, `*password*`) are refused.
 - Turn groups on/off: `ARROW_AGENT_TOOLS=web,files,powershell` (default), e.g. `web,files` or `none`.
+- PowerShell has two modes, `ARROW_AGENT_PS_MODE`:
+  - `safe` (default): only read-only commands (`Get-ChildItem`, `Get-Content`, `Select-String`,
+    `Measure-Object`, `Where-Object`, ...), only paths inside the workspace (no `C:\`, `..`, `~`,
+    `$env:`, `HKLM:`, UNC), no `>`/`Set-Content`/`New-Item`, no `&`, `$( )` or .NET calls.
+    Saving files goes through `write_file`.
+  - `approve`: any command that is not on the blocklist below, still asked every time.
+  In both modes the command runs in PowerShell **ConstrainedLanguage** and without your API keys,
+  tokens or passwords in its environment.
 - PowerShell that is destructive or dangerous is **blocked even if you approve**: recursive delete,
   deleting outside the workspace, disk format, shutdown/sign-out, registry edits, execution policy or
   Defender changes, `iex`/encoded or downloaded code, admin elevation, users/credentials, services and
-  scheduled tasks. The working folder is the workspace, but a command can still read or change other
-  places on your PC, so read every command before you approve it.
+  scheduled tasks. This is not an OS sandbox: in `approve` mode a command runs as you and can reach
+  the rest of your PC, so read every command before you approve it.
 - Tool results go back to the model as **data**, wrapped and labelled; instructions inside a web page
   or file are ignored like on-screen text.
 - `--dry-run` runs read-only tools (search, fetch, read, list) but never writes files or runs PowerShell.

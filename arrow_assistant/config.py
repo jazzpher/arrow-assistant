@@ -129,6 +129,13 @@ def agent_tools() -> tuple[str, ...]:
     return tuple(g for g in AGENT_TOOL_GROUPS if g in {x.strip() for x in raw.split(",")})
 
 
+def agent_ps_mode() -> str:
+    """safe (default): read-only allowlist + ConstrainedLanguage.
+    approve: any command not on the blocklist, still asks every time."""
+    m = os.environ.get("ARROW_AGENT_PS_MODE", "safe").strip().lower()
+    return m if m in ("safe", "approve") else "safe"
+
+
 def agent_workspace() -> str:
     """The only folder agent file tools and PowerShell work in."""
     return os.environ.get("ARROW_AGENT_WORKSPACE") or os.path.join(
