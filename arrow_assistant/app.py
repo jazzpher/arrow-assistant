@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtWidgets import QApplication
 
-from . import ai, capture, config, kb, setup_dialog
+from . import ai, capture, config, kb, setup_dialog, usage
 from .hotkey import HotkeyListener
 from .memory import Memory
 from .overlay import ArrowOverlay
@@ -32,6 +32,7 @@ class ArrowApp(QObject):
     show_points = pyqtSignal(list)
     status = pyqtSignal(str)
     error = pyqtSignal(str)
+    usage_alert = pyqtSignal(str)   # budget / quota warnings (tray balloon)
 
     def __init__(self):
         super().__init__()
@@ -51,9 +52,12 @@ class ArrowApp(QObject):
         self._speaker: Speaker | None = None
 
         self.show_points.connect(self.overlay.point_at)
-        self.tray = Tray(self._qt_app, config.hotkey(), self._quit, on_keys=self._edit_keys)
+        self.tray = Tray(self._qt_app, config.hotkey(), self._quit, on_keys=self._edit_keys,
+                         on_usage=self._show_usage)
         self.status.connect(self.tray.set_status)
         self.error.connect(self.tray.notify)
+        self.usage_alert.connect(self.tray.notify)
+        usage.tracker().set_notifier(self._on_usage_alert)
 
         self.hotkey = HotkeyListener(
             config.hotkey(), on_press=self._ptt_down, on_release=self._ptt_up)
@@ -73,6 +77,40 @@ class ArrowApp(QObject):
             self.provider = config.select_llm()
             self.stt_provider = config.select_stt()
             self.agent.providers = config.select_agent_providers()
+
+    # -- usage guard ------------------------------------------------------------
+    def _on_usage_alert(self, message: str, spoken: str) -> None:
+        """Any thread: one tray balloon + one short spoken line."""
+        log_diagnostic(f"usage alert: {message}")
+        self.usage_alert.emit(message[:250])
+        if spoken:
+            self._speak_async(spoken)
+
+    def _configured_providers(self) -> list[str]:
+        names = [p.name for p in self.agent.providers]
+        if self.provider and self.provider.name not in names:
+            names.insert(0, self.provider.name)
+        if self.stt_provider == "groq":
+            names.append("groq")
+        return names
+
+    def _show_usage(self) -> None:
+        from PyQt6.QtWidgets import QMessageBox
+        QMessageBox.information(None, "Arrow - usage today",
+                                usage.tracker().summary_text(self._configured_providers()))
+
+    def _check_openrouter(self) -> None:
+        key = config.get_key("OPENROUTER_API_KEY")
+        if not key:
+            return
+        models = {config.OPENROUTER_MODEL, config.AGENT_OPENROUTER_MODEL}
+        for model in sorted(models):
+            msg = usage.openrouter_key_warning(key, model)
+            if msg:
+                usage.tracker().alert_once(
+                    f"openrouter:keycheck:{model}", msg,
+                    "Heads up: baka gumagastos ng credits ang OpenRouter.")
+                return
 
     def _speak_async(self, text: str) -> None:
         def run():
@@ -231,6 +269,8 @@ class ArrowApp(QObject):
             if text:
                 self.memory.record(app, question, text)
             speaker.wait()
+        except usage.UsageLimitReached as exc:
+            self._report(str(exc))
         except Exception as exc:
             self._report(f"pipeline error: {exc}")
         finally:
@@ -252,6 +292,7 @@ class ArrowApp(QObject):
     def run(self) -> int:
         self.hotkey.start()
         self.agent_keys.start()
+        threading.Thread(target=self._check_openrouter, daemon=True).start()
         print(f"[arrow] ready - hold {config.hotkey()} and ask. "
               f"LLM: {self.provider.name if self.provider else 'NONE (set a key)'} | "
               f"STT: {self.stt_provider}")

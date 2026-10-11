@@ -14,6 +14,7 @@ from typing import Callable
 
 import requests
 
+from .. import usage as usage_mod
 from ..config import LLMProvider
 from .actions import Action, ActionParseError, extract_json, parse_action
 
@@ -114,8 +115,9 @@ class ProviderChain:
     def __init__(self, providers: list[LLMProvider],
                  post: Callable = requests.post,
                  clock: Callable[[], float] = time.monotonic,
-                 timeout: int = 90):
+                 timeout: int = 90, usage=None):
         self.providers = list(providers)
+        self._usage = usage            # None = the process-wide tracker
         self._post = post
         self._clock = clock
         self._timeout = timeout
@@ -133,6 +135,13 @@ class ProviderChain:
         for prov in self.providers:
             h = self._health[prov.name]
             if h.disabled or h.cooldown_until > now:
+                continue
+            try:                     # hard daily limit (ARROW_DAILY_*_LIMIT)
+                self._tracker().check_allowed(prov.name)
+            except usage_mod.UsageLimitReached as exc:
+                h.cooldown_until = self._clock() + _seconds_to_midnight()
+                h.last_error = str(exc)
+                errors.append(f"{prov.name}: {exc}")
                 continue
             tried = True
             h.calls += 1
@@ -165,6 +174,9 @@ class ProviderChain:
         if not tried and not errors:
             errors.append("all providers cooling down")
         raise QuotaExhausted(wait, "; ".join(errors))
+
+    def _tracker(self):
+        return self._usage if self._usage is not None else usage_mod.tracker()
 
     def status(self) -> dict[str, dict]:
         now = self._clock()
@@ -201,16 +213,27 @@ class ProviderChain:
         except requests.RequestException as exc:
             raise _Retryable(f"network error: {type(exc).__name__}", 30) from None
         status = resp.status_code
+        tracker = self._tracker()
         if status == 200:
             try:
-                return _extract_text(prov.name, resp.json())
-            except (ValueError, KeyError, IndexError, TypeError):
+                data = resp.json()
+            except (ValueError, TypeError):
+                data = None
+            counts = (usage_mod.tokens_from_gemini(data) if prov.name == "gemini"
+                      else usage_mod.tokens_from_openai(data)) if isinstance(data, dict) else (0, 0, 0)
+            tracker.record(prov.name, prov.model, *counts)
+            try:
+                return _extract_text(prov.name, data)
+            except (ValueError, KeyError, IndexError, TypeError, AttributeError):
                 raise _Retryable("malformed response", 20) from None
+        tracker.record(prov.name, prov.model)   # failed requests still count
         body = ""
         try:
             body = (resp.text or "")[:300]
         except Exception:
             pass
+        if status in (402, 429) or "RESOURCE_EXHAUSTED" in body.upper():
+            tracker.quota_hit(prov.name, body, 429 if status != 402 else 402)
         if status == 429:
             per_day = "perday" in body.lower().replace(" ", "").replace("_", "")
             ra = _retry_after(resp)
@@ -233,6 +256,13 @@ class _Fatal(Exception):
     def __init__(self, msg: str, disable: bool):
         super().__init__(msg)
         self.disable = disable
+
+
+def _seconds_to_midnight() -> float:
+    import datetime as dt
+    now = dt.datetime.now()
+    tomorrow = (now + dt.timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    return max(60.0, (tomorrow - now).total_seconds())
 
 
 def _retry_after(resp) -> float:

@@ -50,12 +50,78 @@ Arrow can also *do* short tasks for you, with approval and a panic key. See [doc
    Windows Credential Manager. You can change them later from the tray icon → *API keys...*
 4. Hold `Ctrl+Alt+Space`, ask something, release.
 
-Optional: a `%APPDATA%\Arrow\.env` file works for other settings (`ARROW_AGENT_*`, ...). Logs
+Optional: a `%APPDATA%\Arrow\.env` file works for other settings (`ARROW_AGENT_*`, the
+`ARROW_DAILY_*` usage budgets, ...). Logs
 go to `%APPDATA%\Arrow\arrow.log`. Local speech (faster-whisper) is not in the installer; use the
 developer setup below for that. Uninstall from *Settings → Apps*.
 
 Windows SmartScreen may warn the first time because the installer is not code-signed yet: click
 *More info → Run anyway*.
+
+## Will this cost me money?
+
+Short answer: **not with the default setup**, as long as you don't turn billing on yourself.
+What each provider actually does (checked against their docs on 2026-10-11; providers change
+their terms, so re-check the linked pages):
+
+- **Gemini (Google AI Studio key).** A new key lives in a Google Cloud project on the **Free
+  tier** until you click *Set up billing* and link a billing account. Google's billing page
+  lists the Free tier with "N/A" spend cap and says paid tiers start only when you "link a
+  billing account and Prepay"; you can "unlink a project from its billing account to return to
+  the free tier". On the free tier, going over the limits gives **HTTP 429
+  `RESOURCE_EXHAUSTED`** (requests per day reset at midnight Pacific time), not a bill.
+  Charges only happen on a project with billing enabled. Check the *Plan* column on
+  [aistudio.google.com/api-keys](https://aistudio.google.com/api-keys): if it says *Paid*, that
+  key can cost money. (Trade-off: Google notes free-tier prompts may be used to improve its
+  products; paid-tier ones are not.) Sources: [Billing](https://ai.google.dev/gemini-api/docs/billing),
+  [Rate limits](https://ai.google.dev/gemini-api/docs/rate-limits) (your live per-model limits:
+  [aistudio.google.com/rate-limit](https://aistudio.google.com/rate-limit)).
+- **Groq (speech-to-text).** The Free plan is rate-limited (HTTP 429 when you go over). You are
+  only billed after you upgrade to the Developer plan and add a payment method.
+  Sources: [Rate limits](https://console.groq.com/docs/rate-limits),
+  [Billing FAQs](https://console.groq.com/docs/billing-faqs).
+- **OpenRouter.** Models whose id ends in `:free` (the default,
+  `google/gemma-4-31b-it:free`) don't spend credits; they have per-day request caps and return
+  429 when you hit them. Paid models spend prepaid credits you bought; with no credits they fail
+  (HTTP 402) instead of charging a card (unless you turned on auto top-up). Source:
+  [Limits](https://openrouter.ai/docs/api-reference/limits).
+- **NVIDIA Build.** Hosted endpoints on build.nvidia.com are free for prototyping and
+  rate-limited (about 40 requests/minute for most models, per their FAQ), with no per-token
+  billing. Source: [build.nvidia.com](https://build.nvidia.com) FAQ.
+- **edge-tts** and the local fallbacks need no key at all.
+
+### The usage guard
+
+Arrow counts its own API calls per provider and model, per day (your PC's local date), in
+`%APPDATA%\Arrow\usage.json`: requests, prompt/answer tokens (from the provider's usage data),
+HTTP 429s, and seconds of audio sent to Groq. Tray icon → **Usage today...** shows the numbers.
+
+- At **80%** and again at **100%** of a provider's daily *warn* budget you get one tray
+  notification and one short spoken line ("Heads up: malapit na sa daily limit ang Gemini").
+  Each fires once per day.
+- When a provider answers **429 / `RESOURCE_EXHAUSTED`** you get one "free-tier quota reached
+  for <provider>, resets later" notice per day. A **402** (payment required) gets its own notice.
+- At startup, with an OpenRouter key, Arrow asks `GET https://openrouter.ai/api/v1/key` and
+  warns if the key spent credits today, if the model isn't a `:free` one, or if the account has
+  bought credits. If the check fails, it stays quiet.
+- Optional **hard limits** refuse new calls for that provider for the rest of the day. In agent
+  mode the planner just moves on to the next provider (gemini → nvidia → openrouter).
+
+The budgets are **Arrow's own conservative defaults, not the providers' limits.** Free-tier
+numbers change often, so look up your real limits (links above) and set your own:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `ARROW_DAILY_REQUEST_WARN` | gemini 100, openrouter 40, nvidia 300, groq 500 | requests/day before the 80%/100% warnings |
+| `ARROW_DAILY_TOKEN_WARN` | 1,000,000 (LLMs; Groq off) | tokens/day before the warnings |
+| `ARROW_DAILY_REQUEST_LIMIT` | off | hard stop, requests/day |
+| `ARROW_DAILY_TOKEN_LIMIT` | off | hard stop, tokens/day |
+| `ARROW_USAGE_ALERTS` | 1 | `0` keeps counting but shows/says nothing |
+
+Add `_GEMINI`, `_OPENROUTER`, `_NVIDIA` or `_GROQ` to any of them for one provider, e.g.
+`ARROW_DAILY_REQUEST_WARN_GEMINI=200`. `0`/`off` turns that budget off. Arrow's day starts at
+local midnight, while Gemini's daily quota resets at midnight Pacific, so the two counters
+won't line up exactly.
 
 ## Developer setup
 
