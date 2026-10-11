@@ -127,3 +127,5 @@ def route_points(points: list[Point], monitors: list[dict]) -> dict[int, list[Po
         else:
             routed.setdefault(0, []).append(pt)  # clamp to first monitor
     return routed
+
+
