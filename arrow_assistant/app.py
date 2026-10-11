@@ -14,18 +14,18 @@ from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtWidgets import QApplication
 
 from . import ai, capture, config, kb, setup_dialog, usage
+from .agent.hotkeys import AgentHotkeys
+from .agent.stack import AgentStack
+from .agent.trigger import parse_agent_request
+from .errlog import log_diagnostic, log_error
 from .hotkey import HotkeyListener
 from .memory import Memory
 from .overlay import ArrowOverlay
-from .errlog import log_error, log_diagnostic
-from .points import Point, SpeechFilter, parse_points, to_image_px
+from .points import Point, SpeechFilter, to_image_px
 from .sentences import SentenceStreamer
 from .stt import MicRecorder, transcribe
 from .tray import Tray
 from .tts import Speaker
-from .agent.hotkeys import AgentHotkeys
-from .agent.stack import AgentStack
-from .agent.trigger import parse_agent_request
 
 
 class ArrowApp(QObject):

@@ -128,7 +128,7 @@ def extract_json(raw: str) -> dict:
     if not isinstance(raw, str) or not raw.strip():
         raise ActionParseError("empty model output")
     text = raw.strip()
-    text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=re.I)
+    text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=re.IGNORECASE)
     start = text.find("{")
     if start < 0:
         raise ActionParseError("no JSON object in model output")
@@ -268,7 +268,7 @@ def parse_action(raw: str) -> Action:
 
     if kind == "web_fetch":
         url = obj.get("url")
-        if not isinstance(url, str) or not re.match(r"^https?://", url.strip(), re.I) \
+        if not isinstance(url, str) or not re.match(r"^https?://", url.strip(), re.IGNORECASE) \
                 or len(url) > 2000:
             raise ActionParseError("web_fetch needs an http(s) url")
         return Action(url=url.strip(), **common)
