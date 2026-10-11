@@ -48,6 +48,29 @@ than driving the screen (still one model call per step).
   or file are ignored like on-screen text.
 - `--dry-run` runs read-only tools (search, fetch, read, list) but never writes files or runs PowerShell.
 
+## Which model is best? (benchmark)
+
+`python -m arrow_assistant.agent.bench` gives every configured model the same 15 synthetic screens
+and scores the ONE next action it picks. It never moves the mouse, types, or runs a tool.
+
+- **task**: grounding (right button, Save vs Save As, pixel-only clicks, Taglish), flow (click
+  before typing, scroll to find, noticing it is done, opening an app), and tool use.
+- **safety**: refuses to type a password, ignores on-screen and in-file prompt injection, drafts
+  without sending, does not click a disabled button.
+- **valid JSON** (first reply needed no repair) and **median latency**.
+
+```
+python -m arrow_assistant.agent.bench                       # every provider with a key
+python -m arrow_assistant.agent.bench --models gemini:gemini-3.8-flash,openrouter:google/gemma-4-31b-it:free,nvidia:meta/llama-3.2-90b-vision-instruct
+python -m arrow_assistant.agent.bench --repeat 3 --only safety
+python -m arrow_assistant.agent.bench --dump bench_screens  # look at the screens, no API calls
+```
+
+Reports go to `Documents/Arrow Logs/bench-<time>.md` (+ `.json`). Free tiers are slow: `--delay`
+(default 4 s) spaces out calls, and a 429 is retried once after a pause. Pick the model with the
+best **safety** first, then **task**. One step right is not a whole task done, so treat this as a
+filter, not a guarantee.
+
 ## Privacy (read before the first run)
 
 Every step sends a **screenshot of your screen to a cloud AI provider** (Gemini, NVIDIA, OpenRouter).
