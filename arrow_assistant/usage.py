@@ -14,10 +14,11 @@ and set the env vars (see .env.example / README "Will this cost me money?").
     ARROW_DAILY_REQUEST_WARN[_<PROVIDER>]   warn budget, requests/day
     ARROW_DAILY_TOKEN_WARN[_<PROVIDER>]     warn budget, tokens/day
     ARROW_DAILY_REQUEST_LIMIT[_<PROVIDER>]  hard stop, requests/day (0/off = none)
-    ARROW_DAILY_TOKEN_LIMIT[_<PROVIDER>]    hard stop, tokens/day (0/off = none)
+    ARROW_DAILY_TOKEN_LIMIT[_<PROVIDER>]    next-call token threshold, may overshoot (0/off = none)
     ARROW_USAGE_ALERTS=0                    no tray/voice alerts (still counts)
 
-Never raises on IO problems: a broken usage file must not break the app.
+Reservations fail closed on lock, persistence or corrupt counter failures.
+Token thresholds are not dollar or token caps.
 """
 from __future__ import annotations
 
@@ -25,6 +26,9 @@ import datetime as _dt
 import json
 import os
 import threading
+import time
+from contextlib import contextmanager
+from functools import wraps
 from typing import Callable
 
 PROVIDERS = ("gemini", "openrouter", "nvidia", "groq")
@@ -106,6 +110,14 @@ def is_quota_error(status: int, body: str = "") -> bool:
     return status == 429 or "RESOURCE_EXHAUSTED" in b
 
 
+def _locked(fn):
+    @wraps(fn)
+    def wrapped(self, *args, **kwargs):
+        with self._transaction():
+            return fn(self, *args, **kwargs)
+    return wrapped
+
+
 class UsageTracker:
     def __init__(self, path: str | None = None,
                  today: Callable[[], _dt.date] = _dt.date.today,
@@ -118,7 +130,87 @@ class UsageTracker:
         self._env = env
         self._lock = threading.RLock()
         self._notifier: Callable[[str, str], None] | None = None
+        self._depth = 0
+        self._corrupt = False
         self._data = self._load()
+
+    @contextmanager
+    def _transaction(self):
+        """Reload under an OS file lock, shared by all threads/processes."""
+        with self._lock:
+            if self._depth:
+                yield
+                return
+            try:
+                os.makedirs(os.path.dirname(self.path) or ".", exist_ok=True)
+                lock_file = open(self.path + ".lock", "a+b")
+            except OSError:
+                raise UsageLimitReached("unknown", "Usage counter unavailable; calls stopped.") from None
+            with lock_file as lock:
+                # Ensure one byte exists for the Windows byte-range lock.
+                # In append mode tell() may be zero even on an existing file.
+                lock.seek(0, os.SEEK_END)
+                if lock.tell() == 0:
+                    lock.write(b"0")
+                    lock.flush()
+                lock.seek(0)
+                if os.name == "nt":
+                    import msvcrt
+                    deadline = time.monotonic() + 10
+                    while True:
+                        try:
+                            msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
+                            break
+                        except OSError:
+                            if time.monotonic() >= deadline:
+                                raise UsageLimitReached("unknown", "Usage counter lock unavailable; calls stopped.")
+                            time.sleep(0.05)
+                else:
+                    import fcntl
+                    fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+                try:
+                    self._data = self._load()
+                    self._depth = 1
+                    yield
+                finally:
+                    self._depth = 0
+                    lock.seek(0)
+                    if os.name == "nt":
+                        msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
+                    else:
+                        fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+
+    @_locked
+    def reserve(self, provider: str, model: str = "", audio_seconds: float = 0.0):
+        """Count an attempted call BEFORE network, atomically with limit check.
+
+        Request caps are strict reservations. Token limits are next-call
+        thresholds, not dollar or token caps; missing usage blocks the next
+        call when a token threshold is enabled.
+        """
+        if self._corrupt:
+            raise UsageLimitReached(provider, "Usage counter is corrupt; calls stopped. Restore or review/reset usage.json before continuing.")
+        self.check_allowed(provider)
+        day = self._day()
+        counts = self._prov(day, provider)
+        for target in (counts, counts["models"].setdefault(model, _empty_counts())):
+            target["requests"] += 1
+            target["audio_seconds"] += audio_seconds
+        counts["unknown_usage"] = counts.get("unknown_usage", 0) + (provider != "groq")
+        self._save(strict=True)
+        alerts = self._budget_alerts(day, provider, counts)
+        self._save(strict=True)
+        for msg, spoken in alerts:
+            self._fire(msg, spoken)
+
+    @_locked
+    def finish(self, provider, model, counts=None):
+        """None means usage unknown, never silently zero."""
+        if counts is not None:
+            p = self._prov(self._day(), provider)
+            p["unknown_usage"] = max(0, p.get("unknown_usage", 0) - 1)
+            self.add_tokens(provider, model, *counts)
+            self._save()
 
     # -- wiring -----------------------------------------------------------
     def set_notifier(self, fn: Callable[[str, str], None] | None) -> None:
@@ -131,16 +223,32 @@ class UsageTracker:
 
     # -- persistence ------------------------------------------------------
     def _load(self) -> dict:
+        self._corrupt = False
         try:
             with open(self.path, encoding="utf-8") as f:
                 data = json.load(f)
-            if isinstance(data, dict) and isinstance(data.get("days"), dict):
-                return data
-        except (OSError, ValueError, TypeError):
-            pass
-        return {"version": 1, "days": {}}
+            assert isinstance(data, dict) and isinstance(data.get("days"), dict)
+            for day in data["days"].values():
+                assert isinstance(day, dict) and isinstance(day.get("providers"), dict)
+                assert isinstance(day.get("alerts"), list)
+                for p in day["providers"].values():
+                    assert isinstance(p, dict) and isinstance(p.get("models", {}), dict)
+                    for counts in [p] + list(p.get("models", {}).values()):
+                        assert isinstance(counts, dict)
+                        for k in _empty_counts():
+                            assert isinstance(counts.get(k, 0), (int, float)) and counts.get(k, 0) >= 0
+            return data
+        except FileNotFoundError:
+            return {"version": 1, "days": {}}
+        except (OSError, ValueError, TypeError, AssertionError):
+            self._corrupt = True
+            return {"version": 1, "days": {}}
 
-    def _save(self) -> None:
+    def _save(self, strict=False) -> None:
+        if self._corrupt:
+            if strict:
+                raise UsageLimitReached("unknown", "Corrupt usage counter; calls stopped.")
+            return
         try:
             days = self._data["days"]
             for old in sorted(days)[:-KEEP_DAYS]:
@@ -150,8 +258,9 @@ class UsageTracker:
             with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(self._data, f, indent=1)
             os.replace(tmp, self.path)
-        except Exception:  # noqa: BLE001 - never break the app over a counter
-            pass
+        except Exception:  # noqa: BLE001
+            if strict:
+                raise UsageLimitReached("unknown", "Usage counter could not be saved; calls stopped.") from None
 
     def _day(self) -> dict:
         key = self._today().isoformat()
@@ -174,6 +283,7 @@ class UsageTracker:
         return p
 
     # -- recording --------------------------------------------------------
+    @_locked
     def record(self, provider: str, model: str = "", prompt_tokens: int = 0,
                completion_tokens: int = 0, total_tokens: int = 0,
                audio_seconds: float = 0.0) -> None:
@@ -204,6 +314,7 @@ class UsageTracker:
         for msg, spoken in alerts:
             self._fire(msg, spoken)
 
+    @_locked
     def add_tokens(self, provider: str, model: str = "", prompt_tokens: int = 0,
                    completion_tokens: int = 0, total_tokens: int = 0) -> None:
         """Add tokens to a request already counted (streamed answers report
@@ -247,12 +358,12 @@ class UsageTracker:
                 if level < 100:
                     out.append((f"{name}: {level}% of today's usage budget "
                                 f"({', '.join(parts)}).",
-                                f"Heads up: malapit na sa daily limit ang {name}."))
+                                f"Heads up: malapit na sa Arrow warning budget ang {name}."))
                 else:
                     out.append((f"{name}: today's usage budget reached "
-                                f"({', '.join(parts)}). Free tiers just get rate-limited; "
+                                f"({', '.join(parts)}). This is an Arrow warning budget, not a billing cap; "
                                 f"see 'Usage today...' in the tray.",
-                                f"Heads up: naabot na ang daily limit ng {name}."))
+                                f"Heads up: naabot na ang Arrow warning budget ng {name}."))
         # only the highest new level matters when one call jumps past both
         return out[-1:]
 
@@ -267,6 +378,7 @@ class UsageTracker:
         except Exception:  # noqa: BLE001
             pass
 
+    @_locked
     def alert_once(self, key: str, msg: str, spoken: str = "") -> bool:
         """Fire a one-off alert at most once per local day (per key)."""
         try:
@@ -281,6 +393,7 @@ class UsageTracker:
         self._fire(msg, spoken)
         return True
 
+    @_locked
     def quota_hit(self, provider: str, body: str = "", status: int = 429) -> None:
         """A provider said 429 / RESOURCE_EXHAUSTED / 402. Notify once per day."""
         name = DISPLAY.get(provider, provider)
@@ -294,19 +407,20 @@ class UsageTracker:
             pass
         if status == 402:
             self.alert_once(f"{provider}:payment",
-                            f"{name} says payment required (HTTP 402): this key is on a "
-                            "paid plan with no credits left. Free models/keys don't do this.",
+                            f"{name} says payment required (HTTP 402): check account balance, key limits and billing status. "
+                            "This response alone does not establish the account plan.",
                             f"Heads up: humihingi ng bayad ang {name}.")
             return
         flat = (body or "").lower().replace(" ", "").replace("_", "")
         when = ("resets at midnight Pacific time" if provider == "gemini" and "perday" in flat
                 else "resets later")
         self.alert_once(f"{provider}:quota",
-                        f"Free-tier quota reached for {name} (HTTP 429), {when}. "
+                        f"Rate limit reached for {name} (HTTP 429), {when}. "
                         "This is a rate limit, not a charge.",
-                        f"Heads up: naubos na ang free quota ng {name} for now.")
+                        f"Heads up: na-rate limit ng {name} for now.")
 
     # -- hard limits ------------------------------------------------------
+    @_locked
     def blocked_reason(self, provider: str) -> str | None:
         try:
             with self._lock:
@@ -314,11 +428,15 @@ class UsageTracker:
                 rl = budget("request_limit", provider, self.env)
                 tl = budget("token_limit", provider, self.env)
                 name = DISPLAY.get(provider, provider)
+                if self._corrupt:
+                    return "Usage counter is corrupt; configured limits cannot be verified."
+                if tl and p.get("unknown_usage", 0):
+                    return f"{name}: token usage is unknown; token threshold cannot be verified."
                 if rl and p["requests"] >= rl:
                     return (f"{name}: daily request limit reached ({p['requests']}/{rl}, "
                             f"ARROW_DAILY_REQUEST_LIMIT). Resets tomorrow.")
                 if tl and p["total_tokens"] >= tl:
-                    return (f"{name}: daily token limit reached ({p['total_tokens']:,}/{tl:,}, "
+                    return (f"{name}: daily token threshold reached (may overshoot per request) ({p['total_tokens']:,}/{tl:,}, "
                             f"ARROW_DAILY_TOKEN_LIMIT). Resets tomorrow.")
         except Exception:  # noqa: BLE001
             return None
@@ -334,7 +452,10 @@ class UsageTracker:
             raise UsageLimitReached(provider, reason)
 
     # -- reporting --------------------------------------------------------
+    @_locked
     def snapshot(self) -> dict:
+        if self._corrupt:
+            raise UsageLimitReached("unknown", "Usage counter is corrupt; counts unavailable.")
         with self._lock:
             day = self._day()
             return json.loads(json.dumps(day["providers"]))
@@ -347,6 +468,8 @@ class UsageTracker:
             lines.append("No API calls yet today.")
         for prov in names:
             p = snap.get(prov) or _empty_counts()
+            if p.get("unknown_usage"):
+                lines.append(f"{DISPLAY.get(prov, prov)}: {p['unknown_usage']} call(s) with unknown token usage.")
             rw, tw = budget("request_warn", prov, self.env), budget("token_warn", prov, self.env)
             rl, tl = budget("request_limit", prov, self.env), budget("token_limit", prov, self.env)
             req = f"{p.get('requests', 0)} requests (warn {rw or 'off'}" + (
@@ -373,7 +496,7 @@ class UsageTracker:
 
 def openrouter_key_warning(api_key: str, model: str, get=None, timeout: int = 10) -> str | None:
     """GET https://openrouter.ai/api/v1/key and return a warning when this
-    key could be spending money, else None. Silent (None) on any failure."""
+    key could be spending money, else None. Failures return an explicit unknown-status warning."""
     if not api_key:
         return None
     try:
@@ -383,10 +506,10 @@ def openrouter_key_warning(api_key: str, model: str, get=None, timeout: int = 10
         resp = get("https://openrouter.ai/api/v1/key",
                    headers={"Authorization": f"Bearer {api_key}"}, timeout=timeout)
         if getattr(resp, "status_code", 0) != 200:
-            return None
+            return "OpenRouter account status could not be checked; billing status is unknown."
         d = (resp.json() or {}).get("data") or {}
     except Exception:  # noqa: BLE001
-        return None
+        return "OpenRouter account status could not be checked; billing status is unknown."
     free_model = (model or "").endswith(":free")
     spent_today = float(d.get("usage_daily") or 0)
     paid_before = d.get("is_free_tier") is False
@@ -401,6 +524,11 @@ def openrouter_key_warning(api_key: str, model: str, get=None, timeout: int = 10
         return ("OpenRouter: this account has bought credits. ':free' models still "
                 "don't spend them, but paid models would.")
     return None
+
+
+def require_free_model(provider):
+    if provider.name == "openrouter" and not provider.model.endswith(":free"):
+        raise UsageLimitReached("openrouter", "OpenRouter model is not :free; request stopped by the free-only policy.")
 
 
 # -- process-wide tracker -------------------------------------------------------

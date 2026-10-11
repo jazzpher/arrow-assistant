@@ -30,7 +30,7 @@ def test_usage_alert_goes_to_tray_and_voice_once(_isolated_usage, monkeypatch):
     for _ in range(6):
         _isolated_usage.record("gemini", "m")
     assert len(a.usage_alert.got) == 2                 # 80% and 100%
-    assert spoken[0] == "Heads up: malapit na sa daily limit ang Gemini."
+    assert spoken[0] == "Heads up: malapit na sa Arrow warning budget ang Gemini."
 
 
 def test_pipeline_reports_hard_limit_clearly(_isolated_usage, monkeypatch):

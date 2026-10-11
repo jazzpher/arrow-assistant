@@ -60,12 +60,16 @@ Windows SmartScreen may warn the first time because the installer is not code-si
 
 ## Will this cost me money?
 
-Short answer: **not with the default setup**, as long as you don't turn billing on yourself.
+**This tracker does not enforce a dollar spending cap.** Gemini/Groq account billing must
+be checked in the provider dashboard before use, including the project linked to an existing
+key. The app cannot determine that billing state from the key. Keep billing disabled and
+use free accounts only. OpenRouter models not ending in `:free` are blocked before sending.
+No payment or billing changes are made by Arrow.
 What each provider actually does (checked against their docs on 2026-10-11; providers change
 their terms, so re-check the linked pages):
 
-- **Gemini (Google AI Studio key).** A new key lives in a Google Cloud project on the **Free
-  tier** until you click *Set up billing* and link a billing account. Google's billing page
+- **Gemini (Google AI Studio key).** New accounts begin on the **Free tier**, but a key on an existing project inherits
+  that project's billing state; a new key alone does not prove free access. Google's billing page
   lists the Free tier with "N/A" spend cap and says paid tiers start only when you "link a
   billing account and Prepay"; you can "unlink a project from its billing account to return to
   the free tier". On the free tier, going over the limits gives **HTTP 429
@@ -103,8 +107,12 @@ HTTP 429s, and seconds of audio sent to Groq. Tray icon → **Usage today...** s
   for <provider>, resets later" notice per day. A **402** (payment required) gets its own notice.
 - At startup, with an OpenRouter key, Arrow asks `GET https://openrouter.ai/api/v1/key` and
   warns if the key spent credits today, if the model isn't a `:free` one, or if the account has
-  bought credits. If the check fails, it stays quiet.
-- Optional **hard limits** refuse new calls for that provider for the rest of the day. In agent
+  bought credits. If the check fails, it warns that account status is unknown; it never certifies billing safety.
+- Optional **request limits** reserve attempts atomically before the network call, including
+  concurrent app instances. An unreadable/corrupt counter stops calls until reviewed.
+  **Token limits are next-call thresholds**, not hard token caps: a single request can overshoot.
+  Unknown token usage (interrupted streams or missing metadata) blocks subsequent calls when
+  a token threshold is enabled. It is shown as unknown, not zero. These are not dollar caps. In agent
   mode the planner just moves on to the next provider (gemini → nvidia → openrouter).
 
 The budgets are **Arrow's own conservative defaults, not the providers' limits.** Free-tier
@@ -118,7 +126,7 @@ that show up as the once-a-day "quota reached" notice, not as a budget warning.)
 | `ARROW_DAILY_REQUEST_WARN` | gemini 50, openrouter 40, nvidia 300, groq 500 | requests/day before the 80%/100% warnings |
 | `ARROW_DAILY_TOKEN_WARN` | 1,000,000 (LLMs; Groq off) | tokens/day before the warnings |
 | `ARROW_DAILY_REQUEST_LIMIT` | off | hard stop, requests/day |
-| `ARROW_DAILY_TOKEN_LIMIT` | off | hard stop, tokens/day |
+| `ARROW_DAILY_TOKEN_LIMIT` | off | next-call token threshold (may overshoot) |
 | `ARROW_USAGE_ALERTS` | 1 | `0` keeps counting but shows/says nothing |
 
 Add `_GEMINI`, `_OPENROUTER`, `_NVIDIA` or `_GROQ` to any of them for one provider, e.g.

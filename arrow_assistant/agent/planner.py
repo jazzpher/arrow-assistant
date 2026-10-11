@@ -137,7 +137,8 @@ class ProviderChain:
             if h.disabled or h.cooldown_until > now:
                 continue
             try:                     # hard daily limit (ARROW_DAILY_*_LIMIT)
-                self._tracker().check_allowed(prov.name)
+                usage_mod.require_free_model(prov)
+                self._tracker().reserve(prov.name, prov.model)
             except usage_mod.UsageLimitReached as exc:
                 h.cooldown_until = self._clock() + _seconds_to_midnight()
                 h.last_error = str(exc)
@@ -221,12 +222,12 @@ class ProviderChain:
                 data = None
             counts = (usage_mod.tokens_from_gemini(data) if prov.name == "gemini"
                       else usage_mod.tokens_from_openai(data)) if isinstance(data, dict) else (0, 0, 0)
-            tracker.record(prov.name, prov.model, *counts)
+            tracker.finish(prov.name, prov.model, counts if data and (data.get("usageMetadata") or data.get("usage")) else None)
             try:
                 return _extract_text(prov.name, data)
             except (ValueError, KeyError, IndexError, TypeError, AttributeError):
                 raise _Retryable("malformed response", 20) from None
-        tracker.record(prov.name, prov.model)   # failed requests still count
+        # Attempt already reserved before network; missing usage remains unknown.
         body = ""
         try:
             body = (resp.text or "")[:300]
