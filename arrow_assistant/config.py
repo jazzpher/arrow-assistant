@@ -117,6 +117,31 @@ def agent_max_steps() -> int:
     return max(1, min(n, 200))
 
 
+AGENT_TOOL_GROUPS = ("web", "files", "powershell")
+
+
+def agent_tools() -> tuple[str, ...]:
+    """Tool groups the agent may use: ARROW_AGENT_TOOLS=web,files,powershell
+    (default: all three; PowerShell always asks first). "none" turns them off."""
+    raw = os.environ.get("ARROW_AGENT_TOOLS", "web,files,powershell").lower()
+    if raw.strip() in ("", "none", "off", "0"):
+        return ()
+    return tuple(g for g in AGENT_TOOL_GROUPS if g in {x.strip() for x in raw.split(",")})
+
+
+def agent_ps_mode() -> str:
+    """safe (default): read-only allowlist + ConstrainedLanguage.
+    approve: any command not on the blocklist, still asks every time."""
+    m = os.environ.get("ARROW_AGENT_PS_MODE", "safe").strip().lower()
+    return m if m in ("safe", "approve") else "safe"
+
+
+def agent_workspace() -> str:
+    """The only folder agent file tools and PowerShell work in."""
+    return os.environ.get("ARROW_AGENT_WORKSPACE") or os.path.join(
+        os.path.expanduser("~"), "Documents", "Arrow Workspace")
+
+
 AGENT_GEMINI_MODEL = os.environ.get("ARROW_AGENT_GEMINI_MODEL", "gemini-3.8-flash")
 AGENT_OPENROUTER_MODEL = os.environ.get(
     "ARROW_AGENT_OPENROUTER_MODEL", "google/gemma-4-31b-it:free")

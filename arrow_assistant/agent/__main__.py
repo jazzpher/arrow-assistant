@@ -19,6 +19,7 @@ from .panic import PanicSwitch
 from .planner import Planner, ProviderChain
 from .risk import assess, is_sensitive_window
 from .state import StateStore
+from .tools import from_config as tools_from_config
 from .ui import ConsoleUI
 
 
@@ -61,7 +62,8 @@ def main(argv: list[str] | None = None) -> int:
         log=ActionLog(), panic=panic, activity=ActivityMonitor(screen.cursor),
         risk=assess, sensitive=is_sensitive_window, store=store,
         config=LoopConfig(max_steps=args.max_steps, mode=args.mode,
-                           scope_apps=frozenset(a.strip().lower() for a in args.scope.split(",") if a.strip())))
+                           scope_apps=frozenset(a.strip().lower() for a in args.scope.split(",") if a.strip())),
+        tools=tools_from_config(args.dry_run))
     resume = store.load() if args.resume else None
     if args.resume and resume is None:
         print("Nothing to resume.")
