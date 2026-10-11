@@ -1,0 +1,241 @@
+{
+  "run_id": "38116172938",
+  "sha": "ad1f94cd920ea7123f2bf098cfdf875480ebd8ca",
+  "config": "fhd150",
+  "python": "3.12.10",
+  "passed": 10,
+  "failed": 0,
+  "skipped": 0,
+  "checks": [
+    {
+      "check": "display_config",
+      "status": "pass",
+      "detail": "fhd150: requested 1920x1080@150% -> actual 1920x1080 windows_dpi=[144, 144] (150%) qt_dpr=1.5 scaling=real monitors=1",
+      "config": "fhd150",
+      "requested": {
+        "w": 1920,
+        "h": 1080,
+        "scale": 150
+      },
+      "actual": {
+        "w": 1920,
+        "h": 1080,
+        "windows_dpi": [
+          144,
+          144
+        ],
+        "windows_scale_percent": 150,
+        "qt_dpr": 1.5
+      },
+      "scaling_mode": "real",
+      "monitors": 1,
+      "qt_screens": [
+        {
+          "name": "HyperVMonitor",
+          "geometry": [
+            0,
+            0,
+            1280,
+            720
+          ],
+          "dpr": 1.5,
+          "logical_dpi": 96.0,
+          "physical_dpi": 64.0
+        }
+      ]
+    },
+    {
+      "check": "notepad_launch",
+      "status": "pass",
+      "detail": "window 'Untitled - Notepad' class=Notepad rect=(40,40,940,640)"
+    },
+    {
+      "check": "screenshot",
+      "status": "pass",
+      "detail": "1920x1080 mon={'left': 0, 'top': 0, 'width': 1920, 'height': 1080, 'is_primary': True, 'name': 'Generic PnP Monitor', 'unique_id': '\\\\\\\\?\\\\DISPLAY#MSH062E#5&1a097cd8&0&UID5527112#{e6f07b5f-ee97-4a90-b076-33f57bf4eaa7}'} monitors=[{'left': 0, 'top': 0, 'width': 1920, 'height': 1080, 'is_primary': True, 'name': 'Generic PnP Monitor', 'unique_id': '\\\\\\\\?\\\\DISPLAY#MSH062E#5&1a097cd8&0&UID5527112#{e6f07b5f-ee97-4a90-b076-33f57bf4eaa7}'}] fg=notepad.exe 'Untitled - Notepad'"
+    },
+    {
+      "check": "uia_dump",
+      "status": "pass",
+      "detail": "27 raw, 18 numbered; File=[51, 85, 99, 114]; names=['Minimize', 'Maximize', 'Close', 'System', 'File', 'Edit', 'Format', 'View', 'Help', 'Text Editor', 'Line up', 'Line down', 'Column left', 'Column right', 'Ln 1, Col 1', '100%', 'Windows (CRLF)', 'UTF-8']"
+    },
+    {
+      "check": "overlay_arrow",
+      "status": "pass",
+      "detail": "target=(75,99) blue_px_in_box=547 changed_px=648 arrow_bbox=[78, 103, 107, 154] tip_offset_px=[3, 4] arrow_size_px=[30, 52] size_vs_dpr1=1.44 (expect ~1.5) screens=[('HyperVMonitor', (0, 0, 1280, 720), 1.5)] mon={'left': 0, 'top': 0, 'width': 1920, 'height': 1080, 'is_primary': True, 'name': 'Generic PnP Monitor', 'unique_id': '\\\\\\\\?\\\\DISPLAY#MSH062E#5&1a097cd8&0&UID5527112#{e6f07b5f-ee97-4a90-b076-33f57bf4eaa7}'}",
+      "target": [
+        75,
+        99
+      ],
+      "blue_bbox": [
+        18,
+        104,
+        1804,
+        1052
+      ],
+      "arrow_bbox": [
+        78,
+        103,
+        107,
+        154
+      ],
+      "tip_offset": [
+        3,
+        4
+      ],
+      "arrow_size": [
+        30,
+        52
+      ],
+      "dpr": 1.5
+    },
+    {
+      "check": "tts_edge_miniaudio",
+      "status": "pass",
+      "detail": "voice=fil-PH-BlessicaNeural mp3=30240B synth=1.08s decoded=5.04s @44100Hz playback: started ok (0 devices)"
+    },
+    {
+      "check": "agent_dry_run",
+      "status": "pass",
+      "detail": "status=done msg=clicked File steps=2 click_pt=(75, 99) file_rect=[51, 85, 99, 114] fg_app=('notepad.exe', 'Untitled - Notepad')"
+    },
+    {
+      "check": "agent_risk_gate",
+      "status": "pass",
+      "detail": "app=notepad.exe title='Untitled - Notepad' cases=[(\"click 'File'\", 'safe', 'safe'), (\"click 'Delete'\", 'confirm', 'confirm'), ('type \"hunter2\"', 'block', 'block'), ('press ctrl+alt+delete', 'block', 'block')]"
+    },
+    {
+      "check": "real_model_teach",
+      "status": "pass",
+      "detail": "gemini/gemini-3.8-flash accuracy 2/2 answered (1 unanswered: 429 quota); File: hit=False (norm1000) alt_hit=False raw=[] pt=[] rect=[51, 85, 99, 114] t=0.41s ERR RuntimeError: gemini request failed: HTTP 429; Edit: hit=True (norm1000) alt_hit=False raw=[[64, 93, 'Edit menu']] pt=[[122, 100, 'Edit menu']] rect=[99, 85, 151, 114] t=23.75s; Format: hit=True (norm1000) alt_hit=False raw=[[99, 93, 'Format']] pt=[[190, 100, 'Format']] rect=[151, 85, 230, 114] t=9.39s",
+      "accuracy": "2/2",
+      "rows": [
+        {
+          "target": "File",
+          "question": "Where do I click to open a file? / Nasaan ang File menu?",
+          "uia_rect": [
+            51,
+            85,
+            99,
+            114
+          ],
+          "answer_raw": "",
+          "spoken": "",
+          "points_model": [],
+          "point_space": "norm1000",
+          "points_screen": [],
+          "hit": false,
+          "alt_space": "pixels",
+          "alt_points_screen": [],
+          "alt_hit": false,
+          "error": "RuntimeError: gemini request failed: HTTP 429",
+          "retries": 2,
+          "first_chunk_s": null,
+          "total_s": 0.41,
+          "image": [
+            1568,
+            882
+          ],
+          "scale": 0.8166666666666667
+        },
+        {
+          "target": "Edit",
+          "question": "Nasaan ang Edit menu? Where do I click to find Undo or Replace?",
+          "uia_rect": [
+            99,
+            85,
+            151,
+            114
+          ],
+          "answer_raw": "[POINT:64,93:Edit menu] Click **Edit** near the top left of Notepad to find options like Undo and Replace.",
+          "spoken": "Click **Edit** near the top left of Notepad to find options like Undo and Replace.",
+          "points_model": [
+            [
+              64,
+              93,
+              "Edit menu"
+            ]
+          ],
+          "point_space": "norm1000",
+          "points_screen": [
+            [
+              122,
+              100,
+              "Edit menu"
+            ]
+          ],
+          "hit": true,
+          "alt_space": "pixels",
+          "alt_points_screen": [
+            [
+              78,
+              114,
+              "Edit menu"
+            ]
+          ],
+          "alt_hit": false,
+          "error": "",
+          "retries": 0,
+          "first_chunk_s": 23.53,
+          "total_s": 23.75,
+          "image": [
+            1568,
+            882
+          ],
+          "scale": 0.8166666666666667
+        },
+        {
+          "target": "Format",
+          "question": "Where do I change the font? Nasaan ang Format menu?",
+          "uia_rect": [
+            151,
+            85,
+            230,
+            114
+          ],
+          "answer_raw": "[POINT:99,93:Format] Click the **Format** menu right here, then select **Font** to change your font settings.",
+          "spoken": "Click the **Format** menu right here, then select **Font** to change your font settings.",
+          "points_model": [
+            [
+              99,
+              93,
+              "Format"
+            ]
+          ],
+          "point_space": "norm1000",
+          "points_screen": [
+            [
+              190,
+              100,
+              "Format"
+            ]
+          ],
+          "hit": true,
+          "alt_space": "pixels",
+          "alt_points_screen": [
+            [
+              121,
+              114,
+              "Format"
+            ]
+          ],
+          "alt_hit": false,
+          "error": "",
+          "retries": 1,
+          "first_chunk_s": 9.38,
+          "total_s": 9.39,
+          "image": [
+            1568,
+            882
+          ],
+          "scale": 0.8166666666666667
+        }
+      ]
+    },
+    {
+      "check": "app_tray_alive",
+      "status": "pass",
+      "detail": "alive_10s=True exit=None logs=[] output_tail=[arrow] ready - hold ctrl+alt+space and ask. LLM: NONE (set a key) | STT: local\n[arrow] agent: hold ctrl+alt+a (or say 'Arrow agent, ...') | mode=step max_steps=25 | panic=ctrl+alt+esc | providers=NONE\n"
+    }
+  ]
+}

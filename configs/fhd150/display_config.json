@@ -1,0 +1,115 @@
+{
+  "config": "fhd150",
+  "requested": {
+    "w": 1920,
+    "h": 1080,
+    "scale": 150
+  },
+  "actual": {
+    "w": 1920,
+    "h": 1080,
+    "windows_dpi": [
+      144,
+      144
+    ],
+    "windows_scale_percent": 150,
+    "qt_dpr": 1.5
+  },
+  "scaling_mode": "real",
+  "monitors": 1,
+  "qt_screens": [
+    {
+      "name": "HyperVMonitor",
+      "geometry": [
+        0,
+        0,
+        1280,
+        720
+      ],
+      "dpr": 1.5,
+      "logical_dpi": 96.0,
+      "physical_dpi": 64.0
+    }
+  ],
+  "setup": {
+    "requested": {
+      "w": 1920,
+      "h": 1080,
+      "scale": 150
+    },
+    "before": {
+      "mode": {
+        "w": 1024,
+        "h": 768,
+        "bpp": 32,
+        "hz": 64
+      },
+      "dpi": [
+        96,
+        96
+      ]
+    },
+    "modes_available": [
+      "640x480",
+      "800x600",
+      "1024x768",
+      "1152x864",
+      "1280x720",
+      "1280x800",
+      "1280x1024",
+      "1366x768",
+      "1440x900",
+      "1600x900",
+      "1600x1200",
+      "1680x1050",
+      "1920x1080"
+    ],
+    "set_resolution": {
+      "test_rc": 0,
+      "rc": 0
+    },
+    "sources": 1,
+    "set_scale": [
+      {
+        "rc": 0,
+        "scaleRel": 2,
+        "before": {
+          "recommended": 100,
+          "current": 100,
+          "max": 175,
+          "raw": [
+            0,
+            0,
+            3
+          ]
+        }
+      }
+    ],
+    "scale_after": [
+      {
+        "recommended": 100,
+        "current": 150,
+        "max": 175,
+        "raw": [
+          0,
+          2,
+          3
+        ]
+      }
+    ],
+    "after": {
+      "mode": {
+        "w": 1920,
+        "h": 1080,
+        "bpp": 32,
+        "hz": 64
+      },
+      "dpi": [
+        144,
+        144
+      ]
+    },
+    "real_scale_percent": 150,
+    "simulated": false
+  }
+}

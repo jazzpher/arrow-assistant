@@ -1,0 +1,205 @@
+{
+  "run_id": "38116172938",
+  "sha": "ad1f94cd920ea7123f2bf098cfdf875480ebd8ca",
+  "config": "native",
+  "python": "3.12.10",
+  "passed": 9,
+  "failed": 0,
+  "skipped": 1,
+  "checks": [
+    {
+      "check": "display_config",
+      "status": "pass",
+      "detail": "native: requested -x-@100% -> actual 1024x768 windows_dpi=[96, 96] (100%) qt_dpr=1.0 scaling=real monitors=1",
+      "config": "native",
+      "requested": {
+        "w": null,
+        "h": null,
+        "scale": 100
+      },
+      "actual": {
+        "w": 1024,
+        "h": 768,
+        "windows_dpi": [
+          96,
+          96
+        ],
+        "windows_scale_percent": 100,
+        "qt_dpr": 1.0
+      },
+      "scaling_mode": "real",
+      "monitors": 1,
+      "qt_screens": [
+        {
+          "name": "HyperVMonitor",
+          "geometry": [
+            0,
+            0,
+            1024,
+            768
+          ],
+          "dpr": 1.0,
+          "logical_dpi": 96.0,
+          "physical_dpi": 96.0
+        }
+      ]
+    },
+    {
+      "check": "notepad_launch",
+      "status": "pass",
+      "detail": "window 'Untitled - Notepad' class=Notepad rect=(40,40,940,640)"
+    },
+    {
+      "check": "screenshot",
+      "status": "pass",
+      "detail": "1024x768 mon={'left': 0, 'top': 0, 'width': 1024, 'height': 768, 'is_primary': True, 'name': 'Generic PnP Monitor', 'unique_id': '\\\\\\\\?\\\\DISPLAY#MSH062E#5&1a097cd8&0&UID5527112#{e6f07b5f-ee97-4a90-b076-33f57bf4eaa7}'} monitors=[{'left': 0, 'top': 0, 'width': 1024, 'height': 768, 'is_primary': True, 'name': 'Generic PnP Monitor', 'unique_id': '\\\\\\\\?\\\\DISPLAY#MSH062E#5&1a097cd8&0&UID5527112#{e6f07b5f-ee97-4a90-b076-33f57bf4eaa7}'}] fg=notepad.exe 'Untitled - Notepad'"
+    },
+    {
+      "check": "uia_dump",
+      "status": "pass",
+      "detail": "27 raw, 18 numbered; File=[48, 71, 80, 90]; names=['Minimize', 'Maximize', 'Close', 'System', 'File', 'Edit', 'Format', 'View', 'Help', 'Text Editor', 'Line up', 'Line down', 'Column left', 'Column right', 'Ln 1, Col 1', '100%', 'Windows (CRLF)', 'UTF-8']"
+    },
+    {
+      "check": "overlay_arrow",
+      "status": "pass",
+      "detail": "target=(64,80) blue_px_in_box=274 changed_px=378 arrow_bbox=[66, 83, 85, 116] tip_offset_px=[2, 3] arrow_size_px=[20, 34] size_vs_dpr1=0.94 (expect ~1.0) screens=[('HyperVMonitor', (0, 0, 1024, 768), 1.0)] mon={'left': 0, 'top': 0, 'width': 1024, 'height': 768, 'is_primary': True, 'name': 'Generic PnP Monitor', 'unique_id': '\\\\\\\\?\\\\DISPLAY#MSH062E#5&1a097cd8&0&UID5527112#{e6f07b5f-ee97-4a90-b076-33f57bf4eaa7}'}",
+      "target": [
+        64,
+        80
+      ],
+      "blue_bbox": [
+        8,
+        84,
+        1010,
+        762
+      ],
+      "arrow_bbox": [
+        66,
+        83,
+        85,
+        116
+      ],
+      "tip_offset": [
+        2,
+        3
+      ],
+      "arrow_size": [
+        20,
+        34
+      ],
+      "dpr": 1.0
+    },
+    {
+      "check": "tts_edge_miniaudio",
+      "status": "pass",
+      "detail": "voice=fil-PH-BlessicaNeural mp3=30240B synth=1.05s decoded=5.04s @44100Hz playback: started ok (0 devices)"
+    },
+    {
+      "check": "agent_dry_run",
+      "status": "pass",
+      "detail": "status=done msg=clicked File steps=2 click_pt=(64, 80) file_rect=[48, 71, 80, 90] fg_app=('notepad.exe', 'Untitled - Notepad')"
+    },
+    {
+      "check": "agent_risk_gate",
+      "status": "pass",
+      "detail": "app=notepad.exe title='Untitled - Notepad' cases=[(\"click 'File'\", 'safe', 'safe'), (\"click 'Delete'\", 'confirm', 'confirm'), ('type \"hunter2\"', 'block', 'block'), ('press ctrl+alt+delete', 'block', 'block')]"
+    },
+    {
+      "check": "real_model_teach",
+      "status": "skip",
+      "detail": "gemini/gemini-3.8-flash: free-tier quota exhausted (HTTP 429 on every question after retries); no answers to judge. File: hit=False (norm1000) alt_hit=False raw=[] pt=[] rect=[48, 71, 80, 90] t=0.31s ERR RuntimeError: gemini request failed: HTTP 429; Edit: hit=False (norm1000) alt_hit=False raw=[] pt=[] rect=[80, 71, 114, 90] t=0.33s ERR RuntimeError: gemini request failed: HTTP 429; Format: hit=False (norm1000) alt_hit=False raw=[] pt=[] rect=[114, 71, 166, 90] t=0.33s ERR RuntimeError: gemini request failed: HTTP 429",
+      "accuracy": "0/3 (quota)",
+      "rows": [
+        {
+          "target": "File",
+          "question": "Where do I click to open a file? / Nasaan ang File menu?",
+          "uia_rect": [
+            48,
+            71,
+            80,
+            90
+          ],
+          "answer_raw": "",
+          "spoken": "",
+          "points_model": [],
+          "point_space": "norm1000",
+          "points_screen": [],
+          "hit": false,
+          "alt_space": "pixels",
+          "alt_points_screen": [],
+          "alt_hit": false,
+          "error": "RuntimeError: gemini request failed: HTTP 429",
+          "retries": 2,
+          "first_chunk_s": null,
+          "total_s": 0.31,
+          "image": [
+            1024,
+            768
+          ],
+          "scale": 1.0
+        },
+        {
+          "target": "Edit",
+          "question": "Nasaan ang Edit menu? Where do I click to find Undo or Replace?",
+          "uia_rect": [
+            80,
+            71,
+            114,
+            90
+          ],
+          "answer_raw": "",
+          "spoken": "",
+          "points_model": [],
+          "point_space": "norm1000",
+          "points_screen": [],
+          "hit": false,
+          "alt_space": "pixels",
+          "alt_points_screen": [],
+          "alt_hit": false,
+          "error": "RuntimeError: gemini request failed: HTTP 429",
+          "retries": 2,
+          "first_chunk_s": null,
+          "total_s": 0.33,
+          "image": [
+            1024,
+            768
+          ],
+          "scale": 1.0
+        },
+        {
+          "target": "Format",
+          "question": "Where do I change the font? Nasaan ang Format menu?",
+          "uia_rect": [
+            114,
+            71,
+            166,
+            90
+          ],
+          "answer_raw": "",
+          "spoken": "",
+          "points_model": [],
+          "point_space": "norm1000",
+          "points_screen": [],
+          "hit": false,
+          "alt_space": "pixels",
+          "alt_points_screen": [],
+          "alt_hit": false,
+          "error": "RuntimeError: gemini request failed: HTTP 429",
+          "retries": 2,
+          "first_chunk_s": null,
+          "total_s": 0.33,
+          "image": [
+            1024,
+            768
+          ],
+          "scale": 1.0
+        }
+      ]
+    },
+    {
+      "check": "app_tray_alive",
+      "status": "pass",
+      "detail": "alive_10s=True exit=None logs=[] output_tail=[arrow] ready - hold ctrl+alt+space and ask. LLM: NONE (set a key) | STT: local\n[arrow] agent: hold ctrl+alt+a (or say 'Arrow agent, ...') | mode=step max_steps=25 | panic=ctrl+alt+esc | providers=NONE\n"
+    }
+  ]
+}

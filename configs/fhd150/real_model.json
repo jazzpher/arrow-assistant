@@ -1,0 +1,127 @@
+{
+  "provider": "gemini",
+  "model": "gemini-3.8-flash",
+  "margin_px": 12,
+  "rows": [
+    {
+      "target": "File",
+      "question": "Where do I click to open a file? / Nasaan ang File menu?",
+      "uia_rect": [
+        51,
+        85,
+        99,
+        114
+      ],
+      "answer_raw": "",
+      "spoken": "",
+      "points_model": [],
+      "point_space": "norm1000",
+      "points_screen": [],
+      "hit": false,
+      "alt_space": "pixels",
+      "alt_points_screen": [],
+      "alt_hit": false,
+      "error": "RuntimeError: gemini request failed: HTTP 429",
+      "retries": 2,
+      "first_chunk_s": null,
+      "total_s": 0.41,
+      "image": [
+        1568,
+        882
+      ],
+      "scale": 0.8166666666666667
+    },
+    {
+      "target": "Edit",
+      "question": "Nasaan ang Edit menu? Where do I click to find Undo or Replace?",
+      "uia_rect": [
+        99,
+        85,
+        151,
+        114
+      ],
+      "answer_raw": "[POINT:64,93:Edit menu] Click **Edit** near the top left of Notepad to find options like Undo and Replace.",
+      "spoken": "Click **Edit** near the top left of Notepad to find options like Undo and Replace.",
+      "points_model": [
+        [
+          64,
+          93,
+          "Edit menu"
+        ]
+      ],
+      "point_space": "norm1000",
+      "points_screen": [
+        [
+          122,
+          100,
+          "Edit menu"
+        ]
+      ],
+      "hit": true,
+      "alt_space": "pixels",
+      "alt_points_screen": [
+        [
+          78,
+          114,
+          "Edit menu"
+        ]
+      ],
+      "alt_hit": false,
+      "error": "",
+      "retries": 0,
+      "first_chunk_s": 23.53,
+      "total_s": 23.75,
+      "image": [
+        1568,
+        882
+      ],
+      "scale": 0.8166666666666667
+    },
+    {
+      "target": "Format",
+      "question": "Where do I change the font? Nasaan ang Format menu?",
+      "uia_rect": [
+        151,
+        85,
+        230,
+        114
+      ],
+      "answer_raw": "[POINT:99,93:Format] Click the **Format** menu right here, then select **Font** to change your font settings.",
+      "spoken": "Click the **Format** menu right here, then select **Font** to change your font settings.",
+      "points_model": [
+        [
+          99,
+          93,
+          "Format"
+        ]
+      ],
+      "point_space": "norm1000",
+      "points_screen": [
+        [
+          190,
+          100,
+          "Format"
+        ]
+      ],
+      "hit": true,
+      "alt_space": "pixels",
+      "alt_points_screen": [
+        [
+          121,
+          114,
+          "Format"
+        ]
+      ],
+      "alt_hit": false,
+      "error": "",
+      "retries": 1,
+      "first_chunk_s": 9.38,
+      "total_s": 9.39,
+      "image": [
+        1568,
+        882
+      ],
+      "scale": 0.8166666666666667
+    }
+  ]
+}

@@ -1,0 +1,2 @@
+[arrow] ready - hold ctrl+alt+space and ask. LLM: NONE (set a key) | STT: local
+[arrow] agent: hold ctrl+alt+a (or say 'Arrow agent, ...') | mode=step max_steps=25 | panic=ctrl+alt+esc | providers=NONE

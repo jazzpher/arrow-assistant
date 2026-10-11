@@ -1,0 +1,615 @@
+{
+  "monitor": {
+    "left": 0,
+    "top": 0,
+    "width": 1024,
+    "height": 768,
+    "is_primary": true,
+    "name": "Generic PnP Monitor",
+    "unique_id": "\\\\?\\DISPLAY#MSH062E#5&1a097cd8&0&UID5527112#{e6f07b5f-ee97-4a90-b076-33f57bf4eaa7}"
+  },
+  "raw": [
+    {
+      "name": "Untitled - Notepad",
+      "role": "WindowControl",
+      "rect": [
+        40,
+        40,
+        940,
+        640
+      ],
+      "enabled": true,
+      "offscreen": false,
+      "password": false
+    },
+    {
+      "name": "Text Editor",
+      "role": "EditControl",
+      "rect": [
+        48,
+        91,
+        932,
+        609
+      ],
+      "enabled": true,
+      "offscreen": false,
+      "password": false
+    },
+    {
+      "name": "Status Bar",
+      "role": "StatusBarControl",
+      "rect": [
+        48,
+        609,
+        932,
+        632
+      ],
+      "enabled": true,
+      "offscreen": false,
+      "password": false
+    },
+    {
+      "name": "Application",
+      "role": "MenuBarControl",
+      "rect": [
+        48,
+        71,
+        932,
+        90
+      ],
+      "enabled": true,
+      "offscreen": false,
+      "password": false
+    },
+    {
+      "name": "Vertical",
+      "role": "ScrollBarControl",
+      "rect": [
+        915,
+        91,
+        932,
+        592
+      ],
+      "enabled": false,
+      "offscreen": false,
+      "password": false
+    },
+    {
+      "name": "Horizontal",
+      "role": "ScrollBarControl",
+      "rect": [
+        48,
+        592,
+        915,
+        609
+      ],
+      "enabled": false,
+      "offscreen": false,
+      "password": false
+    },
+    {
+      "name": "Ln 1, Col 1",
+      "role": "TextControl",
+      "rect": [
+        504,
+        611,
+        642,
+        632
+      ],
+      "enabled": true,
+      "offscreen": false,
+      "password": false
+    },
+    {
+      "name": "100%",
+      "role": "TextControl",
+      "rect": [
+        644,
+        611,
+        692,
+        632
+      ],
+      "enabled": true,
+      "offscreen": false,
+      "password": false
+    },
+    {
+      "name": "Windows (CRLF)",
+      "role": "TextControl",
+      "rect": [
+        694,
+        611,
+        812,
+        632
+      ],
+      "enabled": true,
+      "offscreen": false,
+      "password": false
+    },
+    {
+      "name": "UTF-8",
+      "role": "TextControl",
+      "rect": [
+        814,
+        611,
+        916,
+        632
+      ],
+      "enabled": true,
+      "offscreen": false,
+      "password": false
+    },
+    {
+      "name": "System",
+      "role": "MenuBarControl",
+      "rect": [
+        48,
+        48,
+        70,
+        70
+      ],
+      "enabled": true,
+      "offscreen": false,
+      "password": false
+    },
+    {
+      "name": "Minimize",
+      "role": "ButtonControl",
+      "rect": [
+        793,
+        41,
+        840,
+        71
+      ],
+      "enabled": true,
+      "offscreen": false,
+      "password": false
+    },
+    {
+      "name": "Maximize",
+      "role": "ButtonControl",
+      "rect": [
+        840,
+        41,
+        886,
+        71
+      ],
+      "enabled": true,
+      "offscreen": false,
+      "password": false
+    },
+    {
+      "name": "Close",
+      "role": "ButtonControl",
+      "rect": [
+        886,
+        41,
+        933,
+        71
+      ],
+      "enabled": true,
+      "offscreen": false,
+      "password": false
+    },
+    {
+      "name": "File",
+      "role": "MenuItemControl",
+      "rect": [
+        48,
+        71,
+        80,
+        90
+      ],
+      "enabled": true,
+      "offscreen": false,
+      "password": false
+    },
+    {
+      "name": "Edit",
+      "role": "MenuItemControl",
+      "rect": [
+        80,
+        71,
+        114,
+        90
+      ],
+      "enabled": true,
+      "offscreen": false,
+      "password": false
+    },
+    {
+      "name": "Format",
+      "role": "MenuItemControl",
+      "rect": [
+        114,
+        71,
+        166,
+        90
+      ],
+      "enabled": true,
+      "offscreen": false,
+      "password": false
+    },
+    {
+      "name": "View",
+      "role": "MenuItemControl",
+      "rect": [
+        166,
+        71,
+        205,
+        90
+      ],
+      "enabled": true,
+      "offscreen": false,
+      "password": false
+    },
+    {
+      "name": "Help",
+      "role": "MenuItemControl",
+      "rect": [
+        205,
+        71,
+        244,
+        90
+      ],
+      "enabled": true,
+      "offscreen": false,
+      "password": false
+    },
+    {
+      "name": "Line up",
+      "role": "ButtonControl",
+      "rect": [
+        915,
+        91,
+        932,
+        108
+      ],
+      "enabled": false,
+      "offscreen": false,
+      "password": false
+    },
+    {
+      "name": "Line down",
+      "role": "ButtonControl",
+      "rect": [
+        915,
+        575,
+        932,
+        592
+      ],
+      "enabled": false,
+      "offscreen": false,
+      "password": false
+    },
+    {
+      "name": "Column left",
+      "role": "ButtonControl",
+      "rect": [
+        48,
+        592,
+        65,
+        609
+      ],
+      "enabled": false,
+      "offscreen": false,
+      "password": false
+    },
+    {
+      "name": "Column right",
+      "role": "ButtonControl",
+      "rect": [
+        898,
+        592,
+        915,
+        609
+      ],
+      "enabled": false,
+      "offscreen": false,
+      "password": false
+    },
+    {
+      "name": "System",
+      "role": "MenuItemControl",
+      "rect": [
+        48,
+        48,
+        70,
+        70
+      ],
+      "enabled": true,
+      "offscreen": false,
+      "password": false
+    }
+  ],
+  "arrow_numbered": [
+    {
+      "id": 1,
+      "name": "Minimize",
+      "role": "Button",
+      "rect": [
+        793,
+        41,
+        840,
+        71
+      ],
+      "center": [
+        816,
+        56
+      ],
+      "enabled": true
+    },
+    {
+      "id": 2,
+      "name": "Maximize",
+      "role": "Button",
+      "rect": [
+        840,
+        41,
+        886,
+        71
+      ],
+      "center": [
+        863,
+        56
+      ],
+      "enabled": true
+    },
+    {
+      "id": 3,
+      "name": "Close",
+      "role": "Button",
+      "rect": [
+        886,
+        41,
+        933,
+        71
+      ],
+      "center": [
+        909,
+        56
+      ],
+      "enabled": true
+    },
+    {
+      "id": 4,
+      "name": "System",
+      "role": "MenuItem",
+      "rect": [
+        48,
+        48,
+        70,
+        70
+      ],
+      "center": [
+        59,
+        59
+      ],
+      "enabled": true
+    },
+    {
+      "id": 5,
+      "name": "File",
+      "role": "MenuItem",
+      "rect": [
+        48,
+        71,
+        80,
+        90
+      ],
+      "center": [
+        64,
+        80
+      ],
+      "enabled": true
+    },
+    {
+      "id": 6,
+      "name": "Edit",
+      "role": "MenuItem",
+      "rect": [
+        80,
+        71,
+        114,
+        90
+      ],
+      "center": [
+        97,
+        80
+      ],
+      "enabled": true
+    },
+    {
+      "id": 7,
+      "name": "Format",
+      "role": "MenuItem",
+      "rect": [
+        114,
+        71,
+        166,
+        90
+      ],
+      "center": [
+        140,
+        80
+      ],
+      "enabled": true
+    },
+    {
+      "id": 8,
+      "name": "View",
+      "role": "MenuItem",
+      "rect": [
+        166,
+        71,
+        205,
+        90
+      ],
+      "center": [
+        185,
+        80
+      ],
+      "enabled": true
+    },
+    {
+      "id": 9,
+      "name": "Help",
+      "role": "MenuItem",
+      "rect": [
+        205,
+        71,
+        244,
+        90
+      ],
+      "center": [
+        224,
+        80
+      ],
+      "enabled": true
+    },
+    {
+      "id": 10,
+      "name": "Text Editor",
+      "role": "Edit",
+      "rect": [
+        48,
+        91,
+        932,
+        609
+      ],
+      "center": [
+        490,
+        350
+      ],
+      "enabled": true
+    },
+    {
+      "id": 11,
+      "name": "Line up",
+      "role": "Button",
+      "rect": [
+        915,
+        91,
+        932,
+        108
+      ],
+      "center": [
+        923,
+        99
+      ],
+      "enabled": false
+    },
+    {
+      "id": 12,
+      "name": "Line down",
+      "role": "Button",
+      "rect": [
+        915,
+        575,
+        932,
+        592
+      ],
+      "center": [
+        923,
+        583
+      ],
+      "enabled": false
+    },
+    {
+      "id": 13,
+      "name": "Column left",
+      "role": "Button",
+      "rect": [
+        48,
+        592,
+        65,
+        609
+      ],
+      "center": [
+        56,
+        600
+      ],
+      "enabled": false
+    },
+    {
+      "id": 14,
+      "name": "Column right",
+      "role": "Button",
+      "rect": [
+        898,
+        592,
+        915,
+        609
+      ],
+      "center": [
+        906,
+        600
+      ],
+      "enabled": false
+    },
+    {
+      "id": 15,
+      "name": "Ln 1, Col 1",
+      "role": "Text",
+      "rect": [
+        504,
+        611,
+        642,
+        632
+      ],
+      "center": [
+        573,
+        621
+      ],
+      "enabled": true
+    },
+    {
+      "id": 16,
+      "name": "100%",
+      "role": "Text",
+      "rect": [
+        644,
+        611,
+        692,
+        632
+      ],
+      "center": [
+        668,
+        621
+      ],
+      "enabled": true
+    },
+    {
+      "id": 17,
+      "name": "Windows (CRLF)",
+      "role": "Text",
+      "rect": [
+        694,
+        611,
+        812,
+        632
+      ],
+      "center": [
+        753,
+        621
+      ],
+      "enabled": true
+    },
+    {
+      "id": 18,
+      "name": "UTF-8",
+      "role": "Text",
+      "rect": [
+        814,
+        611,
+        916,
+        632
+      ],
+      "center": [
+        865,
+        621
+      ],
+      "enabled": true
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+::notice title=e2e display_config PASS::fhd150: requested 1920x1080@150% -> actual 1920x1080 windows_dpi=[144, 144] (150%) qt_dpr=1.5 scaling=real monitors=1
+::notice title=e2e notepad_launch PASS::window 'Untitled - Notepad' class=Notepad rect=(40,40,940,640)
+::notice title=e2e screenshot PASS::1920x1080 mon={'left': 0, 'top': 0, 'width': 1920, 'height': 1080, 'is_primary': True, 'name': 'Generic PnP Monitor', 'unique_id': '\\\\?\\DISPLAY#MSH062E#5&1a097cd8&0&UID5527112#{e6f07b5f-ee97-4a90-b076-33f57bf4eaa7}'} monitors=[{'left': 0, 'top': 0, 'width': 1920, 'height': 1080, 'is_primary': True, 'name': 'Generic PnP Monitor', 'unique_id': '\\\\?\\DISPLAY#MSH062E#5&1a097cd8&0&UID5527112#{e6f07b5f-ee97-4a90-b076-33f57bf4eaa7}'}] fg=notepad.exe 'Untitled - Notepad'
+::notice title=e2e uia_dump PASS::27 raw, 18 numbered; File=[51, 85, 99, 114]; names=['Minimize', 'Maximize', 'Close', 'System', 'File', 'Edit', 'Format', 'View', 'Help', 'Text Editor', 'Line up', 'Line down', 'Column left', 'Column right', 'Ln 1, Col 1', '100%', 'Windows (CRLF)', 'UTF-8']
+D:\a\arrow-assistant\arrow-assistant\tests\e2e\win_e2e.py:148: DeprecationWarning: Image.Image.getdata is deprecated and will be removed in Pillow 14 (2027-10-15). Use get_flattened_data instead.
+  blue = sum(1 for p in a.getdata()
+D:\a\arrow-assistant\arrow-assistant\tests\e2e\win_e2e.py:150: DeprecationWarning: Image.Image.getdata is deprecated and will be removed in Pillow 14 (2027-10-15). Use get_flattened_data instead.
+  changed = sum(1 for p, q in zip(a.getdata(), b.getdata())
+::notice title=e2e overlay_arrow PASS::target=(75,99) blue_px_in_box=547 changed_px=648 arrow_bbox=[78, 103, 107, 154] tip_offset_px=[3, 4] arrow_size_px=[30, 52] size_vs_dpr1=1.44 (expect ~1.5) screens=[('HyperVMonitor', (0, 0, 1280, 720), 1.5)] mon={'left': 0, 'top': 0, 'width': 1920, 'height': 1080, 'is_primary': True, 'name': 'Generic PnP Monitor', 'unique_id': '\\\\?\\DISPLAY#MSH062E#5&1a097cd8&0&UID5527112#{e6f07b5f-ee97-4a90-b076-33f57bf4eaa7}'}
+Exception in thread Thread-2 (<lambda>):
+Traceback (most recent call last):
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\threading.py", line 1075, in _bootstrap_inner
+::notice title=e2e tts_edge_miniaudio PASS::voice=fil-PH-BlessicaNeural mp3=30240B synth=1.08s decoded=5.04s @44100Hz playback: started ok (0 devices)
+    self.run()
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\threading.py", line 1012, in run
+    self._target(*self._args, **self._kwargs)
+  File "D:\a\arrow-assistant\arrow-assistant\tests\e2e\win_e2e.py", line 208, in <lambda>
+    th = threading.Thread(target=lambda: tts.play_mp3(mp3, stop), daemon=True)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\a\arrow-assistant\arrow-assistant\arrow_assistant\tts.py", line 43, in play_mp3
+    with sd.OutputStream(samplerate=decoded.sample_rate, channels=1,
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\sounddevice.py", line 1533, in __init__
+    _StreamBase.__init__(self, kind='output', wrap_callback='array',
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\sounddevice.py", line 834, in __init__
+    _get_stream_parameters(kind, device, channels, dtype, latency,
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\sounddevice.py", line 2751, in _get_stream_parameters
+    info = query_devices(device)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\sounddevice.py", line 578, in query_devices
+    raise PortAudioError(f'Error querying device {device}')
+sounddevice.PortAudioError: Error querying device -1
+::notice title=e2e agent_dry_run PASS::status=done msg=clicked File steps=2 click_pt=(75, 99) file_rect=[51, 85, 99, 114] fg_app=('notepad.exe', 'Untitled - Notepad')
+::notice title=e2e agent_risk_gate PASS::app=notepad.exe title='Untitled - Notepad' cases=[("click 'File'", 'safe', 'safe'), ("click 'Delete'", 'confirm', 'confirm'), ('type "hunter2"', 'block', 'block'), ('press ctrl+alt+delete', 'block', 'block')]
+::notice title=e2e real_model_teach PASS::gemini/gemini-3.8-flash accuracy 2/2 answered (1 unanswered: 429 quota); File: hit=False (norm1000) alt_hit=False raw=[] pt=[] rect=[51, 85, 99, 114] t=0.41s ERR RuntimeError: gemini request failed: HTTP 429; Edit: hit=True (norm1000) alt_hit=False raw=[[64, 93, 'Edit menu']] pt=[[122, 100, 'Edit menu']] rect=[99, 85, 151, 114] t=23.75s; Format: hit=True (norm1000) alt_hit=False raw=[[99, 93, 'Format']] pt=[[190, 100, 'Format']] rect=[151, 85, 230, 114] t=9.39s
+::notice title=e2e app_tray_alive PASS::alive_10s=True exit=None logs=[] output_tail=[arrow] ready - hold ctrl+alt+space and ask. LLM: NONE (set a key) | STT: local | [arrow] agent: hold ctrl+alt+a (or say 'Arrow agent, ...') | mode=step max_steps=25 | panic=ctrl+alt+esc | providers=NONE | 
+::notice title=e2e summary::10/10 ok (fails: [])

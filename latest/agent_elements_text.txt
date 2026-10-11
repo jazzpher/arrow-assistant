@@ -1,0 +1,37 @@
+  1: Button 'Minimize'
+  2: Button 'Maximize'
+  3: Button 'Close'
+  4: MenuItem 'System'
+  5: MenuItem 'File'
+  6: MenuItem 'Edit'
+  7: MenuItem 'Format'
+  8: MenuItem 'View'
+  9: MenuItem 'Help'
+  10: Edit 'Text Editor'
+  11: Button 'Line up' (disabled)
+  12: Button 'Line down' (disabled)
+  13: Button 'Column left' (disabled)
+  14: Button 'Column right' (disabled)
+  15: Text 'Ln 1, Col 1'
+  16: Text '100%'
+  17: Text 'Windows (CRLF)'
+  18: Text 'UTF-8'
+---
+  1: Button 'Minimize'
+  2: Button 'Maximize'
+  3: Button 'Close'
+  4: MenuItem 'System'
+  5: MenuItem 'File'
+  6: MenuItem 'Edit'
+  7: MenuItem 'Format'
+  8: MenuItem 'View'
+  9: MenuItem 'Help'
+  10: Edit 'Text Editor'
+  11: Button 'Line up' (disabled)
+  12: Button 'Line down' (disabled)
+  13: Button 'Column left' (disabled)
+  14: Button 'Column right' (disabled)
+  15: Text 'Ln 1, Col 1'
+  16: Text '100%'
+  17: Text 'Windows (CRLF)'
+  18: Text 'UTF-8'

@@ -1,0 +1,35 @@
+{
+  "config": "native",
+  "requested": {
+    "w": null,
+    "h": null,
+    "scale": 100
+  },
+  "actual": {
+    "w": 1024,
+    "h": 768,
+    "windows_dpi": [
+      96,
+      96
+    ],
+    "windows_scale_percent": 100,
+    "qt_dpr": 1.0
+  },
+  "scaling_mode": "real",
+  "monitors": 1,
+  "qt_screens": [
+    {
+      "name": "HyperVMonitor",
+      "geometry": [
+        0,
+        0,
+        1024,
+        768
+      ],
+      "dpr": 1.0,
+      "logical_dpi": 96.0,
+      "physical_dpi": 96.0
+    }
+  ],
+  "setup": {}
+}

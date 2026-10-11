@@ -1,0 +1,91 @@
+{
+  "provider": "gemini",
+  "model": "gemini-3.8-flash",
+  "margin_px": 12,
+  "rows": [
+    {
+      "target": "File",
+      "question": "Where do I click to open a file? / Nasaan ang File menu?",
+      "uia_rect": [
+        48,
+        71,
+        80,
+        90
+      ],
+      "answer_raw": "",
+      "spoken": "",
+      "points_model": [],
+      "point_space": "norm1000",
+      "points_screen": [],
+      "hit": false,
+      "alt_space": "pixels",
+      "alt_points_screen": [],
+      "alt_hit": false,
+      "error": "RuntimeError: gemini request failed: HTTP 429",
+      "retries": 2,
+      "first_chunk_s": null,
+      "total_s": 0.31,
+      "image": [
+        1024,
+        768
+      ],
+      "scale": 1.0
+    },
+    {
+      "target": "Edit",
+      "question": "Nasaan ang Edit menu? Where do I click to find Undo or Replace?",
+      "uia_rect": [
+        80,
+        71,
+        114,
+        90
+      ],
+      "answer_raw": "",
+      "spoken": "",
+      "points_model": [],
+      "point_space": "norm1000",
+      "points_screen": [],
+      "hit": false,
+      "alt_space": "pixels",
+      "alt_points_screen": [],
+      "alt_hit": false,
+      "error": "RuntimeError: gemini request failed: HTTP 429",
+      "retries": 2,
+      "first_chunk_s": null,
+      "total_s": 0.33,
+      "image": [
+        1024,
+        768
+      ],
+      "scale": 1.0
+    },
+    {
+      "target": "Format",
+      "question": "Where do I change the font? Nasaan ang Format menu?",
+      "uia_rect": [
+        114,
+        71,
+        166,
+        90
+      ],
+      "answer_raw": "",
+      "spoken": "",
+      "points_model": [],
+      "point_space": "norm1000",
+      "points_screen": [],
+      "hit": false,
+      "alt_space": "pixels",
+      "alt_points_screen": [],
+      "alt_hit": false,
+      "error": "RuntimeError: gemini request failed: HTTP 429",
+      "retries": 2,
+      "first_chunk_s": null,
+      "total_s": 0.33,
+      "image": [
+        1024,
+        768
+      ],
+      "scale": 1.0
+    }
+  ]
+}
