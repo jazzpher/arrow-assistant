@@ -20,15 +20,15 @@ import re
 import shutil
 import socket
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
 from urllib.parse import parse_qs, quote_plus, unquote, urlparse
 
 import requests
 
-from .actions import Action, TOOL_KINDS
-from .risk import Assessment, SAFE
+from .actions import TOOL_KINDS, Action
+from .risk import SAFE, Assessment
 
 MAX_OUTPUT_CHARS = 4000
 MAX_READ_CHARS = 8000
@@ -42,59 +42,49 @@ GROUP_OF = {"web_search": "web", "web_fetch": "web", "read_file": "files",
 
 SECRET_FILE = re.compile(
     r"(^|[\\/])(\.env(\..*)?|.*\.kdbx|.*\.pem|.*\.key|.*\.pfx|.*\.p12|id_rsa.*|id_ed25519.*|"
-    r".*credentials.*|.*secrets?\..*|.*password.*|.*\.sqlite|.*cookies.*|login data)$", re.I)
+    r".*credentials.*|.*secrets?\..*|.*password.*|.*\.sqlite|.*cookies.*|login data)$", re.IGNORECASE)
 
 # Never run, even with approval: mass deletion, disks, boot, security, system state,
 # remote code, credential dumping, persistence.
 PS_BLOCKED = [
-    (re.compile(r"\b(format-volume|clear-disk|initialize-disk|diskpart|format\s+[a-z]:)", re.I),
+    (re.compile(r"\b(format-volume|clear-disk|initialize-disk|diskpart|format\s+[a-z]:)", re.IGNORECASE),
      "formats or wipes a disk"),
-    (re.compile(r"\b(bcdedit|bootrec|cipher\s+/w|vssadmin|wbadmin)\b", re.I), "touches boot/backup/recovery"),
-    (re.compile(r"\b(stop-computer|restart-computer|shutdown(\.exe)?|logoff)\b", re.I), "shuts down or signs out"),
-    (re.compile(r"\b(set-executionpolicy|set-mppreference|add-mppreference|disable-windowsoptionalfeature)\b", re.I),
+    (re.compile(r"\b(bcdedit|bootrec|cipher\s+/w|vssadmin|wbadmin)\b", re.IGNORECASE), "touches boot/backup/recovery"),
+    (re.compile(r"\b(stop-computer|restart-computer|shutdown(\.exe)?|logoff)\b", re.IGNORECASE), "shuts down or signs out"),
+    (re.compile(r"\b(set-executionpolicy|set-mppreference|add-mppreference|disable-windowsoptionalfeature)\b", re.IGNORECASE),
      "changes security settings"),
-    (re.compile(r"\b(reg(\.exe)?\s+(add|delete|import)|set-itemproperty\s+.*hk(lm|cu)|remove-item\s+.*hk(lm|cu)|new-itemproperty\s+.*hk(lm|cu))", re.I),
+    (re.compile(r"\b(reg(\.exe)?\s+(add|delete|import)|set-itemproperty\s+.*hk(lm|cu)|remove-item\s+.*hk(lm|cu)|new-itemproperty\s+.*hk(lm|cu))", re.IGNORECASE),
      "edits the registry"),
-    (re.compile(r"\b(invoke-expression|iex)\b|\|\s*iex\b|downloadstring|frombase64string|-enc(odedcommand)?\b", re.I),
+    (re.compile(r"\b(invoke-expression|iex)\b|\|\s*iex\b|downloadstring|frombase64string|-enc(odedcommand)?\b", re.IGNORECASE),
      "runs downloaded or encoded code"),
-    (re.compile(r"\b(net\s+user|net\s+localgroup|new-localuser|add-localgroupmember|mimikatz|sekurlsa|cmdkey|vaultcmd)\b", re.I),
+    (re.compile(r"\b(net\s+user|net\s+localgroup|new-localuser|add-localgroupmember|mimikatz|sekurlsa|cmdkey|vaultcmd)\b", re.IGNORECASE),
      "touches accounts or credentials"),
-    (re.compile(r"\b(schtasks|register-scheduledtask|new-service|sc(\.exe)?\s+(create|config|delete))\b", re.I),
+    (re.compile(r"\b(schtasks|register-scheduledtask|new-service|sc(\.exe)?\s+(create|config|delete))\b", re.IGNORECASE),
      "creates services or scheduled tasks"),
-    (re.compile(r"\b(remove-item|rm|del|erase|rd|rmdir|ri)\b[^|;]*(-recurse|-r\b|/s\b)", re.I),
+    (re.compile(r"\b(remove-item|rm|del|erase|rd|rmdir|ri)\b[^|;]*(-recurse|-r\b|/s\b)", re.IGNORECASE),
      "recursive delete"),
-    (re.compile(r"\b(remove-item|rm|del|erase|rd|rmdir|ri)\b[^|;]*([a-z]:\\\\?\s*$|[a-z]:\\\\(windows|users|program files)|\$env:|~)", re.I),
+    (re.compile(r"\b(remove-item|rm|del|erase|rd|rmdir|ri)\b[^|;]*([a-z]:\\\\?\s*$|[a-z]:\\\\(windows|users|program files)|\$env:|~)", re.IGNORECASE),
      "deletes outside the workspace or system folders"),
-    (re.compile(r"\bstart-process\b[^|;]*-verb\s+runas", re.I), "asks for admin rights"),
+    (re.compile(r"\bstart-process\b[^|;]*-verb\s+runas", re.IGNORECASE), "asks for admin rights"),
 ]
 
 
 # "safe" PowerShell mode (default): only these read-only commands, only
 # workspace paths, and ConstrainedLanguage. Writing goes through write_file.
-PS_SAFE_COMMANDS = frozenset("""
-get-childitem gci ls dir get-content gc cat type get-item gi get-itemproperty gp
-get-date get-location pwd get-process ps get-command gcm get-help help get-filehash
-get-volume get-psdrive get-culture get-timezone get-uptime get-host get-computerinfo
-test-path resolve-path join-path split-path select-object select where-object where ?
-foreach-object foreach % sort-object sort measure-object measure group-object group
-format-table ft format-list fl format-wide fw out-string convertto-json convertfrom-json
-convertto-csv convertfrom-csv convertto-html select-string sls compare-object diff
-write-output echo write-host get-unique tee-object-x hostname whoami ipconfig ping nslookup
-systeminfo tasklist where.exe findstr sort.exe
-""".split()) - {"tee-object-x"}
+PS_SAFE_COMMANDS = frozenset(["get-childitem", "gci", "ls", "dir", "get-content", "gc", "cat", "type", "get-item", "gi", "get-itemproperty", "gp", "get-date", "get-location", "pwd", "get-process", "ps", "get-command", "gcm", "get-help", "help", "get-filehash", "get-volume", "get-psdrive", "get-culture", "get-timezone", "get-uptime", "get-host", "get-computerinfo", "test-path", "resolve-path", "join-path", "split-path", "select-object", "select", "where-object", "where", "?", "foreach-object", "foreach", "%", "sort-object", "sort", "measure-object", "measure", "group-object", "group", "format-table", "ft", "format-list", "fl", "format-wide", "fw", "out-string", "convertto-json", "convertfrom-json", "convertto-csv", "convertfrom-csv", "convertto-html", "select-string", "sls", "compare-object", "diff", "write-output", "echo", "write-host", "get-unique", "tee-object-x", "hostname", "whoami", "ipconfig", "ping", "nslookup", "systeminfo", "tasklist", "where.exe", "findstr", "sort.exe"]) - {"tee-object-x"}
 PS_SAFE_FORBIDDEN = [
-    (re.compile(r"\$\(|@\(|`|\[\s*[a-z_.]+\s*\]\s*::", re.I), "subexpressions, escapes and .NET calls"),
-    (re.compile(r"(^|[\s;|{(])[&.]\s*[\"'$\w\\/]", re.I), "call/dot-source operators"),
-    (re.compile(r">|\b(out-file|set-content|add-content|new-item|copy-item|move-item|rename-item)\b", re.I),
+    (re.compile(r"\$\(|@\(|`|\[\s*[a-z_.]+\s*\]\s*::", re.IGNORECASE), "subexpressions, escapes and .NET calls"),
+    (re.compile(r"(^|[\s;|{(])[&.]\s*[\"'$\w\\/]", re.IGNORECASE), "call/dot-source operators"),
+    (re.compile(r">|\b(out-file|set-content|add-content|new-item|copy-item|move-item|rename-item)\b", re.IGNORECASE),
      "writing files (use write_file instead)"),
-    (re.compile(r"(^|[\s'\"(=,])([a-z]+:[\\/]|\\\\|~[\\/]?|\$env:|\$home\b|\$pshome\b|[a-z]+::)", re.I),
+    (re.compile(r"(^|[\s'\"(=,])([a-z]+:[\\/]|\\\\|~[\\/]?|\$env:|\$home\b|\$pshome\b|[a-z]+::)", re.IGNORECASE),
      "paths outside the workspace"),
     (re.compile(r"\.\.([\\/]|$|\s)"), "paths outside the workspace"),
-    (re.compile(r"-computername|-session\b|-credential", re.I), "remote targets"),
+    (re.compile(r"-computername|-session\b|-credential", re.IGNORECASE), "remote targets"),
 ]
 _PS_CMD_POS = re.compile(r"(?:^|[|;\n{(])\s*([^\s|;{}()]+)")
 _PS_PREFIX = "$ExecutionContext.SessionState.LanguageMode = 'ConstrainedLanguage'; "
-_SECRET_ENV = re.compile(r"(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|AUTH|COOKIE)", re.I)
+_SECRET_ENV = re.compile(r"(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|AUTH|COOKIE)", re.IGNORECASE)
 
 
 def ps_safe_problem(command: str) -> str:
@@ -299,7 +289,7 @@ class ToolRunner:
             if nxt.startswith("/"):
                 p = urlparse(a.url)
                 nxt = f"{p.scheme}://{p.netloc}{nxt}"
-            if not re.match(r"^https?://", nxt, re.I) or not _public_host(
+            if not re.match(r"^https?://", nxt, re.IGNORECASE) or not _public_host(
                     urlparse(nxt).hostname or "", self._resolve):
                 return ToolResult(False, "redirect to a non-public address was blocked")
             resp = self._get(nxt, headers={"User-Agent": UA}, timeout=20,
