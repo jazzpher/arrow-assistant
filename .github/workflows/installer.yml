@@ -26,13 +26,19 @@ jobs:
           python -m pip install -r requirements.txt "pyinstaller>=6.10"
       - name: Build Arrow.exe (bundles Python 3.12)
         working-directory: packaging
-        run: pyinstaller arrow.spec --noconfirm --distpath ..\dist --workpath ..\build
+        shell: pwsh
+        run: |
+          pyinstaller arrow.spec --noconfirm --distpath ..\dist --workpath ..\build *>&1 | Tee-Object -FilePath build.log
+          if ($LASTEXITCODE -ne 0) {
+            Get-Content build.log -Tail 25 | ForEach-Object { Write-Output "::error::$($_ -replace '[\r\n]','')" }
+            exit 1
+          }
       - name: Self-test the built exe
         shell: pwsh
         run: |
           $p = Start-Process dist\Arrow\Arrow.exe -ArgumentList "--self-test","selftest.txt" -Wait -PassThru
-          Get-Content selftest.txt
-          if ($p.ExitCode -ne 0) { exit 1 }
+          Get-Content selftest.txt | ForEach-Object { Write-Output "::notice::$_" }
+          if ($p.ExitCode -ne 0) { Get-Content selftest.txt | ForEach-Object { Write-Output "::error::$_" }; exit 1 }
       - name: Build ArrowSetup.exe
         shell: pwsh
         run: |
