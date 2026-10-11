@@ -57,3 +57,16 @@ jobs:
           python -m pip install -r requirements.txt -r requirements-local.txt
           python -m pip check
           python -c "from faster_whisper import WhisperModel; import pyttsx3"
+
+  windows-usage-regressions:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: x64
+      - name: Exercise Windows process lock and usage policy
+        run: |
+          python -m pip install -r requirements-dev.txt
+          python -m pytest -q tests/test_usage.py tests/test_usage_reservations.py tests/test_usage_hooks.py

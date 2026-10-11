@@ -147,6 +147,9 @@ class UsageTracker:
             except OSError:
                 raise UsageLimitReached("unknown", "Usage counter unavailable; calls stopped.") from None
             with lock_file as lock:
+                # Ensure one byte exists for the Windows byte-range lock.
+                # In append mode tell() may be zero even on an existing file.
+                lock.seek(0, os.SEEK_END)
                 if lock.tell() == 0:
                     lock.write(b"0")
                     lock.flush()
