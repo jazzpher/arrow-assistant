@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtWidgets import QApplication
 
-from . import ai, capture, config, kb
+from . import ai, capture, config, kb, setup_dialog
 from .hotkey import HotkeyListener
 from .memory import Memory
 from .overlay import ArrowOverlay
@@ -37,6 +37,10 @@ class ArrowApp(QObject):
         super().__init__()
         self._qt_app = QApplication(sys.argv)
         capture.set_dpi_awareness()
+        self._qt_app.setQuitOnLastWindowClosed(False)   # tray app: closing a dialog must not quit
+
+        if not config.skip_setup() and not setup_dialog.has_llm_key():
+            setup_dialog.ask_for_keys()                 # first run of the installed app
 
         self.provider = config.select_llm()
         self.stt_provider = config.select_stt()
@@ -47,7 +51,7 @@ class ArrowApp(QObject):
         self._speaker: Speaker | None = None
 
         self.show_points.connect(self.overlay.point_at)
-        self.tray = Tray(self._qt_app, config.hotkey(), self._quit)
+        self.tray = Tray(self._qt_app, config.hotkey(), self._quit, on_keys=self._edit_keys)
         self.status.connect(self.tray.set_status)
         self.error.connect(self.tray.notify)
 
@@ -63,6 +67,12 @@ class ArrowApp(QObject):
             "ctrl+alt+y": self.agent.approve,
             "ctrl+alt+n": self.agent.skip,
         })
+
+    def _edit_keys(self) -> None:
+        if setup_dialog.ask_for_keys():
+            self.provider = config.select_llm()
+            self.stt_provider = config.select_stt()
+            self.agent.providers = config.select_agent_providers()
 
     def _speak_async(self, text: str) -> None:
         def run():

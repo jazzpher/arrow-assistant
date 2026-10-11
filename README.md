@@ -39,7 +39,25 @@ Local speech (local whisper + pyttsx3) needs **zero speech API keys** and is slo
 
 Arrow can also *do* short tasks for you, with approval and a panic key. See [docs/AGENT.md](docs/AGENT.md).
 
-## Setup
+## Easy install (Windows, no Python needed)
+
+1. Download **`ArrowSetup-<version>.exe`** from the latest [Release](../../releases) (or the
+   `ArrowSetup` artifact of the newest *windows-installer* run in the Actions tab).
+2. Run it. It installs for your user only, with no admin prompt, into
+   `%LOCALAPPDATA%\Programs\Arrow Assistant`. It brings its own **Python 3.12** and every
+   package, so you don't install Python or run pip.
+3. On first start, a window asks for your free **Gemini** and **Groq** keys and saves them in
+   Windows Credential Manager. You can change them later from the tray icon → *API keys...*
+4. Hold `Ctrl+Alt+Space`, ask something, release.
+
+Optional: a `%APPDATA%\Arrow\.env` file works for other settings (`ARROW_AGENT_*`, ...). Logs
+go to `%APPDATA%\Arrow\arrow.log`. Local speech (faster-whisper) is not in the installer; use the
+developer setup below for that. Uninstall from *Settings → Apps*.
+
+Windows SmartScreen may warn the first time because the installer is not code-signed yet: click
+*More info → Run anyway*.
+
+## Developer setup
 
 1. Install **64-bit Python 3.12** on Windows (recommended). Do not use 32-bit Python for this setup. Python 3.15 is not supported: required native packages, including optional CTranslate2, do not all publish 3.15 wheels. Python 3.13/3.14 have default-install CI checks, but use 3.12 for this setup.
 2. From the extracted project folder, create a clean environment:

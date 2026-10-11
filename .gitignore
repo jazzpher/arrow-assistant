@@ -7,3 +7,9 @@ dist/
 .venv/
 venv/
 .pytest_cache/
+
+/dist/
+/build/
+/.build-venv/
+selftest.txt
+installed.txt
