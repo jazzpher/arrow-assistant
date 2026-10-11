@@ -103,6 +103,14 @@ class SpeechFilter:
         return rest
 
 
+def to_image_px(x: float, y: float, space: str, img_w: int, img_h: int) -> tuple[int, int]:
+    """Model POINT coordinates -> pixel in the screenshot the model saw,
+    clamped inside it. space is 'pixels' or 'norm1000' (see ai.point_space)."""
+    if space == "norm1000":
+        x, y = x / 1000.0 * img_w, y / 1000.0 * img_h
+    return (min(max(round(x), 0), img_w - 1), min(max(round(y), 0), img_h - 1))
+
+
 def route_points(points: list[Point], monitors: list[dict]) -> dict[int, list[Point]]:
     """Group points by index of the monitor that contains them.
 

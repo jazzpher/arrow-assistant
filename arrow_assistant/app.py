@@ -18,7 +18,7 @@ from .hotkey import HotkeyListener
 from .memory import Memory
 from .overlay import ArrowOverlay
 from .errlog import log_error, log_diagnostic
-from .points import Point, SpeechFilter, parse_points
+from .points import Point, SpeechFilter, parse_points, to_image_px
 from .sentences import SentenceStreamer
 from .stt import MicRecorder, transcribe
 from .tray import Tray
@@ -191,6 +191,7 @@ class ArrowApp(QObject):
             shown: list[Point] = []
             s = capture.scale_factor(img, mon)
             enc_w, enc_h = capture.encoded_size(img)
+            space = ai.point_space(self.provider)
 
             def say(text: str) -> None:
                 spoken.append(text)
@@ -208,9 +209,8 @@ class ArrowApp(QObject):
                     if text:
                         say(text)
                     if pts and not cancel.is_set():
-                        for p in pts:   # clamp inside the image the model saw
-                            x = min(max(p.x, 0), enc_w - 1)
-                            y = min(max(p.y, 0), enc_h - 1)
+                        for p in pts:   # to (clamped) pixels of the image the model saw
+                            x, y = to_image_px(p.x, p.y, space, enc_w, enc_h)
                             shown.append(Point(mon["left"] + round(x / s),
                                                mon["top"] + round(y / s), p.label))
                         # arrow appears while she is still talking

@@ -305,6 +305,7 @@ def check_real_model(qapp, data):
         record("real_model_teach", None, "GEMINI_API_KEY secret not set; skipped")
         return
     from arrow_assistant import ai, capture, config, kb
+    from arrow_assistant import points as points_mod
     from arrow_assistant.points import parse_points
     provider = config.select_llm()
     if provider is None:
@@ -342,28 +343,44 @@ def check_real_model(qapp, data):
         total = time.monotonic() - t0
         text = "".join(chunks)
         spoken, pts = parse_points(text)
-        mapped = []
-        for p in pts:   # identical to ArrowApp._pipeline
-            x = min(max(p.x, 0), enc_w - 1)
-            y = min(max(p.y, 0), enc_h - 1)
-            mapped.append([mon["left"] + round(x / s), mon["top"] + round(y / s), p.label])
-        hit = False
-        if el and mapped:
+        space = getattr(ai, "point_space", lambda _p: "pixels")(provider)
+        to_px = getattr(points_mod, "to_image_px", None)
+
+        def mapit(sp):
+            out = []
+            for p in pts:   # identical to ArrowApp._pipeline
+                if to_px:
+                    x, y = to_px(p.x, p.y, sp, enc_w, enc_h)
+                else:
+                    x, y = min(max(p.x, 0), enc_w - 1), min(max(p.y, 0), enc_h - 1)
+                out.append([mon["left"] + round(x / s), mon["top"] + round(y / s), p.label])
+            return out
+
+        def inside(ms):
+            if not (el and ms):
+                return False
             l, t, r, b = el["rect"]
-            hit = any(l - MARGIN <= m[0] <= r + MARGIN and t - MARGIN <= m[1] <= b + MARGIN
-                      for m in mapped[:1])
+            m = ms[0]
+            return l - MARGIN <= m[0] <= r + MARGIN and t - MARGIN <= m[1] <= b + MARGIN
+        mapped = mapit(space)
+        alt_space = "pixels" if space == "norm1000" else "norm1000"
+        alt = mapit(alt_space) if to_px else []
+        hit = inside(mapped)
         hits += hit
         rows.append({"target": name, "question": question, "uia_rect": el["rect"] if el else None,
                      "answer_raw": text, "spoken": spoken,
                      "points_model": [[p.x, p.y, p.label] for p in pts],
-                     "points_screen": mapped, "hit": hit, "error": err,
+                     "point_space": space, "points_screen": mapped, "hit": hit,
+                     "alt_space": alt_space, "alt_points_screen": alt, "alt_hit": inside(alt),
+                     "error": err,
                      "first_chunk_s": round(first, 2) if first is not None else None,
                      "total_s": round(total, 2), "image": [enc_w, enc_h], "scale": s})
         time.sleep(4)   # free-tier pacing
     (OUT / "real_model.json").write_text(json.dumps(
         {"provider": provider.name, "model": provider.model, "margin_px": MARGIN, "rows": rows},
         indent=2, ensure_ascii=False), encoding="utf-8")
-    summary = "; ".join(f"{r['target']}: hit={r['hit']} pt={r['points_screen'][:1]} rect={r['uia_rect']} "
+    summary = "; ".join(f"{r['target']}: hit={r['hit']} ({r['point_space']}) alt_hit={r['alt_hit']} "
+                        f"raw={r['points_model'][:1]} pt={r['points_screen'][:1]} rect={r['uia_rect']} "
                         f"t={r['total_s']}s{' ERR ' + r['error'] if r['error'] else ''}" for r in rows)
     record("real_model_teach", hits >= 1 and not any(r["error"] for r in rows),
            f"{provider.name}/{provider.model} accuracy {hits}/{len(rows)}; {summary}",
