@@ -108,14 +108,14 @@ HTTP 429s, and seconds of audio sent to Groq. Tray icon → **Usage today...** s
   mode the planner just moves on to the next provider (gemini → nvidia → openrouter).
 
 The budgets are **Arrow's own conservative defaults, not the providers' limits.** Free-tier
-numbers change often, so look up your real limits (links above) and set your own. (One data
-point: in this repo's CI in October 2026, a free AI Studio key on `gemini-3.8-flash` started
-getting 429s after roughly 20 requests in a day. That is why the Gemini default is 20. Your
-project/model may allow more.)
+numbers change often, so look up your real limits (links above) and set your own. (In this
+repo's CI in October 2026, a free AI Studio key on `gemini-3.8-flash` hit runs of 429s after
+about 20 requests within an hour; they cleared a few minutes later. Short-window limits like
+that show up as the once-a-day "quota reached" notice, not as a budget warning.)
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `ARROW_DAILY_REQUEST_WARN` | gemini 20, openrouter 40, nvidia 300, groq 500 | requests/day before the 80%/100% warnings |
+| `ARROW_DAILY_REQUEST_WARN` | gemini 50, openrouter 40, nvidia 300, groq 500 | requests/day before the 80%/100% warnings |
 | `ARROW_DAILY_TOKEN_WARN` | 1,000,000 (LLMs; Groq off) | tokens/day before the warnings |
 | `ARROW_DAILY_REQUEST_LIMIT` | off | hard stop, requests/day |
 | `ARROW_DAILY_TOKEN_LIMIT` | off | hard stop, tokens/day |
