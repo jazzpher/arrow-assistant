@@ -70,7 +70,7 @@ def test_openai_stream_parses_sse(monkeypatch):
     lines = [f"data: {json.dumps(c)}" for c in chunks] + ["data: [DONE]"]
     monkeypatch.setattr(ai.requests, "post",
                         lambda *a, **k: _FakeResp(lines))
-    p = LLMProvider("openrouter", "key", "m", base_url="https://x/v1")
+    p = LLMProvider("openrouter", "key", "m:free", base_url="https://x/v1")
     out = "".join(ai.stream_answer(p, "q", "app", "", None, None))
     assert out == "Press F1. Done."
 
