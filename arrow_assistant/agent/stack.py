@@ -39,6 +39,7 @@ class AgentStack:
         collect = focused = None
         try:
             import uiautomation  # noqa: F401
+
             from .uia import collect_foreground, focused_element
             collect, focused = collect_foreground, focused_element
         except ImportError:

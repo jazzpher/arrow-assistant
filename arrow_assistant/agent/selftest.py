@@ -12,8 +12,8 @@ import argparse
 import platform
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from .. import config
 
@@ -86,6 +86,7 @@ def main(argv: list[str] | None = None) -> int:
     uia_fn = None
     try:
         import uiautomation  # noqa: F401
+
         from .coords import Frame
         from .uia import collect_foreground
 

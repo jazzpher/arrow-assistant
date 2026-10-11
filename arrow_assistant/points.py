@@ -12,11 +12,11 @@ from dataclasses import dataclass
 
 _NUMBER = r"-?\d+(?:\.\d+)?"
 POINT_RE = re.compile(
-    rf"\[\s*POINT\s*:\s*({_NUMBER})\s*,\s*({_NUMBER})\s*:\s*([^\]\n]{{1,80}})\]", re.I)
+    rf"\[\s*POINT\s*:\s*({_NUMBER})\s*,\s*({_NUMBER})\s*:\s*([^\]\n]{{1,80}})\]", re.IGNORECASE)
 # Anything that looks like a POINT tag but is not a valid one (no label,
 # bad numbers, ...). It never becomes an arrow, but it must never be read
 # out loud either.
-JUNK_TAG_RE = re.compile(r"\[\s*POINT\s*:[^\]\n]{0,120}\]", re.I)
+JUNK_TAG_RE = re.compile(r"\[\s*POINT\s*:[^\]\n]{0,120}\]", re.IGNORECASE)
 
 MAX_POINTS = 3  # never clutter the screen with more arrows than this
 
@@ -127,5 +127,3 @@ def route_points(points: list[Point], monitors: list[dict]) -> dict[int, list[Po
         else:
             routed.setdefault(0, []).append(pt)  # clamp to first monitor
     return routed
-
-

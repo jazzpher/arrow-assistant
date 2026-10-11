@@ -74,6 +74,7 @@ def _wav_seconds(wav_bytes: bytes) -> float:
 
 def _transcribe_groq(wav_bytes: bytes, api_key: str | None) -> str:
     import requests
+
     from . import usage
     from .config import GROQ_WHISPER_MODEL
     usage.tracker().reserve("groq", GROQ_WHISPER_MODEL, _wav_seconds(wav_bytes))

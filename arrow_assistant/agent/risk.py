@@ -45,9 +45,9 @@ class RiskContext:
 # The real gate. Code-level, not prompt-level: the model cannot talk its way
 # past it. Order: hard blocks first, then always-confirm, then safe.
 # ---------------------------------------------------------------------------
-import re  # noqa: E402
+import re
 
-from .actions import POINTER_KINDS  # noqa: E402
+from .actions import POINTER_KINDS
 
 # Never touch these apps at all (we do not even screenshot-reason about them).
 NOGO_APPS = frozenset({
@@ -61,16 +61,16 @@ NOGO_TITLE = re.compile(
     r"(password manager|keepass|bitwarden|1password|lastpass|dashlane|"
     r"credential manager|windows security|virus (&|and) threat|user account control|"
     r"registry editor|authenticator|recovery key|2fa|two-factor|one-time (code|password))",
-    re.I)
+    re.IGNORECASE)
 TERMINAL_APPS = frozenset({"cmd.exe", "powershell.exe", "pwsh.exe", "windowsterminal.exe",
                            "wt.exe", "conhost.exe", "bash.exe", "wsl.exe"})
 FINANCE_TITLE = re.compile(
     r"(bank|banking|paypal|gcash|maya|paymaya|checkout|payment|billing|credit card|"
     r"debit card|\bbdo\b|\bbpi\b|metrobank|unionbank|landbank|security bank|wise|"
-    r"stripe|wallet|invoice|transfer funds)", re.I)
+    r"stripe|wallet|invoice|transfer funds)", re.IGNORECASE)
 MESSAGING_TITLE = re.compile(
     r"(messenger|whatsapp|telegram|discord|slack|gmail|outlook|compose|inbox|"
-    r"mail|viber|signal|teams|chat|reply|new message|facebook|instagram|twitter|\bx\b)", re.I)
+    r"mail|viber|signal|teams|chat|reply|new message|facebook|instagram|twitter|\bx\b)", re.IGNORECASE)
 
 # words on the thing being clicked (EN + Tagalog)
 RISKY_LABEL = re.compile(
@@ -82,11 +82,11 @@ RISKY_LABEL = re.compile(
     r"deactivate|close account|change password|"
     r"ipadala|padala|i-?send|i-?post|i-?share|bayad|bayaran|bumili|bilhin|"
     r"burahin|i-?delete|tanggalin|alisin|i-?uninstall|i-?install|"
-    r"confirm|yes, ?delete|permanently)\b", re.I)
+    r"confirm|yes, ?delete|permanently)\b", re.IGNORECASE)
 SECRET_LABEL = re.compile(
     r"(password|passcode|passphrase|\bpin\b|\botp\b|one[- ]time|verification code|"
     r"security code|\bcvv\b|\bcvc\b|card number|account number|\bssn\b|secret|"
-    r"recovery (key|code)|private key|api key|token)", re.I)
+    r"recovery (key|code)|private key|api key|token)", re.IGNORECASE)
 RISKY_KEYS = [
     ({"win", "r"}, "opens the Run dialog"),
     ({"alt", "f4"}, "closes the active window"),
@@ -101,7 +101,7 @@ BLOCKED_KEYS = [
     ({"win", "l"}, "locking the PC is off limits"),
 ]
 OTP_TEXT = re.compile(r"^\s*\d{4,8}\s*$")
-INSTALLER_APP = re.compile(r"(setup|install|update|uninstall|msi)", re.I)
+INSTALLER_APP = re.compile(r"(setup|install|update|uninstall|msi)", re.IGNORECASE)
 
 
 def _in_rects(pt, rects) -> bool:

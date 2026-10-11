@@ -8,7 +8,8 @@ above them is testable with a fake.
 from __future__ import annotations
 
 import time
-from typing import Callable, Protocol
+from collections.abc import Callable
+from typing import Protocol
 
 from .actions import POINTER_KINDS, Action
 from .panic import PanicStop, PanicSwitch

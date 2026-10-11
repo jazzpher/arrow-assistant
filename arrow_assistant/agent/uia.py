@@ -8,7 +8,8 @@ UIA tree (games, some canvases) fall back to raw x,y automatically.
 from __future__ import annotations
 
 import time
-from typing import Any, Callable, Iterable
+from collections.abc import Callable, Iterable
+from typing import Any
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -35,7 +36,7 @@ NAMELESS_SKIP = {"TextControl", "ListItemControl", "TreeItemControl",
 
 
 def _role(raw: str) -> str:
-    return raw[:-7] if raw.endswith("Control") else raw
+    return raw.removesuffix("Control")
 
 
 def walk_controls(root: Any, max_nodes: int = MAX_NODES, max_depth: int = MAX_DEPTH,

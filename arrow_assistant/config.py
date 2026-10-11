@@ -14,6 +14,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
+
 def user_dir() -> str:
     """Per-user folder for the installed app (%APPDATA%\\Arrow): .env, logs."""
     base = os.environ.get("APPDATA") or os.path.join(os.path.expanduser("~"), ".config")

@@ -11,7 +11,7 @@ pynput listener is a thin adapter over it.
 """
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 _MODS = {"ctrl", "control", "alt", "shift", "cmd", "win", "option", "super"}
 _CANON = {"control": "ctrl", "option": "alt", "win": "cmd", "super": "cmd"}
