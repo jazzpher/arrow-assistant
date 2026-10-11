@@ -23,6 +23,7 @@ sys.path.insert(0, str(ROOT))
 
 RESULTS: list[dict] = []
 OUT = Path("e2e-out")
+SYNTHETIC_RECT = None
 
 
 def _one_line(s: str) -> str:
@@ -50,6 +51,9 @@ def run_check(name: str, fn) -> object:
 # ---------------------------------------------------------------------------
 def launch_notepad():
     import uiautomation as auto
+    # Fresh empty document on disposable CI only. Never adopt a user's open document.
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        raise RuntimeError("Windows e2e is CI-only; use selftest for a local PC")
     proc = subprocess.Popen(["notepad.exe"])
     win = None
     deadline = time.monotonic() + 20
@@ -75,14 +79,38 @@ def launch_notepad():
         pass
     time.sleep(1.0)
     r = win.BoundingRectangle
+    global SYNTHETIC_RECT
+    if "untitled" not in (win.Name or "").lower():
+        raise RuntimeError("Refusing to capture a non-synthetic Notepad document")
+    SYNTHETIC_RECT = (r.left + 8, r.top + 8, r.right - 8, r.bottom - 8)
     record("notepad_launch", True,
            f"window '{win.Name}' class={win.ClassName} rect=({r.left},{r.top},{r.right},{r.bottom})")
     return proc, win
 
 
+def safe_image(mon, img):
+    """Keep only the fresh empty Notepad window; preserve coordinate frame."""
+    from PIL import Image
+    if SYNTHETIC_RECT is None:
+        raise RuntimeError("No vetted synthetic window; refusing desktop capture")
+    return mask_to_rect(img, mon, SYNTHETIC_RECT)
+
+
+def mask_to_rect(img, mon, rect):
+    from PIL import Image
+    box = (max(0, rect[0] - mon["left"]), max(0, rect[1] - mon["top"]),
+           min(img.width, rect[2] - mon["left"]), min(img.height, rect[3] - mon["top"]))
+    safe = Image.new("RGB", img.size, "white")
+    if box[2] <= box[0] or box[3] <= box[1]:
+        raise RuntimeError("Synthetic window is outside captured monitor")
+    safe.paste(img.crop(box), box[:2])
+    return safe
+
+
 def screenshot_primary(name: str):
     from arrow_assistant import capture
     mon, img = capture.primary_shot()
+    img = safe_image(mon, img)
     img.save(OUT / name)
     return mon, img
 
@@ -348,6 +376,7 @@ def check_real_model(qapp, data):
         el = find_el(data, name)
         app = capture.foreground_app()
         mon, img = capture.primary_shot()
+        img = safe_image(mon, img)
         image_b64 = capture.encode_for_model(img)
         s = capture.scale_factor(img, mon)
         enc_w, enc_h = capture.encoded_size(img)
@@ -429,7 +458,7 @@ def check_real_model(qapp, data):
                f"question after retries); no answers to judge. {summary}",
                accuracy=f"0/{len(rows)} (quota)", rows=rows)
         return
-    record("real_model_teach", hits >= 1 and not other_err,
+    record("real_model_teach", hits == answered and not other_err,
            f"{provider.name}/{provider.model} accuracy {hits}/{answered} answered"
            f"{f' ({len(quota)} unanswered: 429 quota)' if quota else ''}; {summary}",
            accuracy=f"{hits}/{answered}", rows=rows)
@@ -470,7 +499,7 @@ def check_display(qapp):
             "scaling_mode": mode, "monitors": len(mons), "qt_screens": screens}
     (OUT / "display_config.json").write_text(json.dumps({**info, "setup": setup}, indent=2),
                                             encoding="utf-8")
-    record("display_config", res_ok and mode != "not achieved",
+    record("display_config", None if mode.startswith("simulated") else (res_ok and mode == "real"),
            f"{info['config']}: requested {want_w or '-'}x{want_h or '-'}@{want_scale}% -> "
            f"actual {m['width']}x{m['height']} windows_dpi={dpi} ({real_scale}%) qt_dpr={dpr} "
            f"scaling={mode} monitors={len(mons)}", **info)
@@ -526,6 +555,8 @@ def main() -> int:
         "python": sys.version.split()[0], "passed": len([r for r in RESULTS if r["status"] == "pass"]),
         "failed": len(failed), "skipped": len([r for r in RESULTS if r["status"] == "skip"]),
         "checks": RESULTS}, indent=2, ensure_ascii=False), encoding="utf-8")
+    inconclusive = any(r["status"] == "skip" for r in RESULTS)
+    print(f"::notice title=e2e capability::{ 'INCONCLUSIVE' if inconclusive else 'COMPLETE'}")
     print(f"::notice title=e2e summary::{len(RESULTS) - len(failed)}/{len(RESULTS)} ok "
           f"(fails: {[r['check'] for r in failed]})")
     return 1 if failed else 0

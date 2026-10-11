@@ -163,3 +163,19 @@ The test suite covers the sentence streamer, point-tag parsing, per-monitor poin
 ## License
 
 MIT. Inspired by [Clicky Windows](https://github.com/AbhishekVulla/clicky-windows) - implementation here is original.
+
+
+### CI display checks and privacy
+
+The display-changing e2e scripts are CI-only, not diagnostics to run on a personal
+or borrowed PC. They keep only the fresh synthetic Notepad rectangle in images;
+the rest of the desktop is white before screenshots are stored or sent to Gemini.
+Public e2e-results contains only count/status summaries, never screenshots,
+model responses, console output or logs. The e2e job has read-only repository
+permissions; the separate summary publisher has write access.
+
+Live Gemini checks are off for pushes. They require a manual workflow run with
+`verified_free_key` enabled, after checking that the dedicated test key's project
+has billing disabled. This uses quota and does not verify billing automatically.
+Skipped live checks or simulated display scaling are reported as inconclusive,
+not evidence of successful live-model or real-Windows scaling coverage.

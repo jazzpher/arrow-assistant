@@ -2,11 +2,16 @@ name: e2e-windows
 
 on:
   workflow_dispatch:
+    inputs:
+      verified_free_key:
+        description: 'Run live Gemini only after confirming this dedicated key project has billing disabled (uses quota)'
+        type: boolean
+        default: false
   push:
-    branches: [test/windows-e2e, test/hidpi-e2e]
+    branches: [test/windows-e2e, test/hidpi-e2e, fix/private-e2e]
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: e2e-windows
@@ -58,7 +63,7 @@ jobs:
         env:
           ARROW_SKIP_SETUP: "1"
           ARROW_AGENT_PRIVACY_OK: "1"
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY: ${{ github.event_name == 'workflow_dispatch' && inputs.verified_free_key && secrets.GEMINI_API_KEY || '' }}
         run: |
           if (-not $env:GEMINI_API_KEY) { Write-Output "::notice title=e2e real_model_teach::GEMINI_API_KEY secret is not set; the real-model check will be skipped" }
           python tests/e2e/win_e2e.py --out e2e-out *>&1 | Tee-Object -FilePath e2e-out-console.txt
@@ -66,13 +71,19 @@ jobs:
           New-Item -ItemType Directory -Force e2e-out | Out-Null
           Move-Item e2e-out-console.txt e2e-out\console.txt -Force
           exit $code
+      - name: Export safe artifact summary
+        if: always()
+        shell: pwsh
+        run: python tests/e2e/public_summary.py e2e-out/results.json e2e-safe/summary.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: e2e-out-${{ matrix.config }}
-          path: e2e-out
+          path: e2e-safe
 
   publish:
+    permissions:
+      contents: write
     needs: e2e
     if: always()
     runs-on: ubuntu-latest
@@ -89,10 +100,11 @@ jobs:
           pub="$RUNNER_TEMP/pub"; mkdir -p "$pub/configs"
           for d in arts/e2e-out-*; do
             cfg="${d#arts/e2e-out-}"
-            mkdir -p "$pub/configs/$cfg"; cp -r "$d"/. "$pub/configs/$cfg/"
+            mkdir -p "$pub/configs/$cfg"
+            cp "$d/summary.json" "$pub/configs/$cfg/summary.json"
           done
           # latest/ keeps its old meaning (the native config) for existing readers
-          if [ -d "$pub/configs/native" ]; then mkdir -p "$pub/latest"; cp -r "$pub/configs/native"/. "$pub/latest/"; fi
+          if [ -d "$pub/configs/native" ]; then mkdir -p "$pub/latest"; cp "$pub/configs/native/summary.json" "$pub/latest/"; fi
           echo "run_id=${{ github.run_id }} sha=${{ github.sha }} ref=${{ github.ref_name }}" | tee "$pub/RUN.txt"
           [ -d "$pub/latest" ] && cp "$pub/RUN.txt" "$pub/latest/RUN.txt"
           cd "$pub"
@@ -102,4 +114,4 @@ jobs:
           git add -A
           git commit -q -m "e2e results for run ${{ github.run_id }}"
           git push -q --force "https://x-access-token:$GH_TOKEN@github.com/${{ github.repository }}.git" e2e-results:e2e-results
-          echo "::notice title=e2e artifacts::https://raw.githubusercontent.com/${{ github.repository }}/e2e-results/configs/<config>/results.json"
+          echo "::notice title=e2e artifacts::https://raw.githubusercontent.com/${{ github.repository }}/e2e-results/configs/<config>/summary.json"
