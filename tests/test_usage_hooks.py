@@ -65,7 +65,7 @@ def test_teach_429_notifies_and_counts(monkeypatch, _isolated_usage):
         list(ai.stream_answer(GEM, "q", "a", "", None, None))
     assert "429" in str(ei.value) and "KEY-G" not in str(ei.value)
     assert _isolated_usage.snapshot()["gemini"]["requests"] == 1
-    assert len(alerts) == 1 and "Free-tier quota reached for Gemini" in alerts[0]
+    assert len(alerts) == 1 and "Rate limit reached for Gemini" in alerts[0]
 
 
 def test_teach_hard_limit_refuses_without_network(monkeypatch, _isolated_usage):

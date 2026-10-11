@@ -143,7 +143,7 @@ def _check(resp, name: str) -> None:
                 pass
             usage.tracker().quota_hit(name, body, resp.status_code)
             if resp.status_code == 429:
-                raise RuntimeError(f"{name} free-tier quota reached (HTTP 429); "
+                raise RuntimeError(f"{name} rate limit reached (HTTP 429); "
                                    "try again later")
         raise RuntimeError(f"{name} request failed: HTTP {resp.status_code}")
 
@@ -154,7 +154,7 @@ class _Tokens:
 
     def __init__(self, provider: LLMProvider):
         self.provider = provider
-        self.counts = (0, 0, 0)
+        self.counts = None
         self.sent = False   # True once the provider answered (counts toward quota)
 
     def see_gemini(self, data: dict) -> None:
@@ -166,10 +166,7 @@ class _Tokens:
             self.counts = usage.tokens_from_openai(data)
 
     def record(self) -> None:
-        if not self.sent:
-            return
-        p, c, t = self.counts
-        usage.tracker().record(self.provider.name, self.provider.model, p, c, t)
+        usage.tracker().finish(self.provider.name, self.provider.model, self.counts)
 
 
 def stream_answer(provider: LLMProvider, question: str, app: str,
@@ -208,7 +205,8 @@ def _stream_gemini(provider: LLMProvider, parts: list[dict],
         "contents": _to_gemini_contents(parts),
         "generationConfig": gemini_generation_config(provider.model, 400, 0.4),
     }
-    usage.tracker().check_allowed(provider.name)   # hard daily limit, if set
+    usage.require_free_model(provider)
+    usage.tracker().reserve(provider.name, provider.model)
     tok = _Tokens(provider)
     try:
         with requests.post(url, json=body, headers=headers, stream=True,
@@ -254,7 +252,8 @@ def _stream_openai_compat(provider: LLMProvider, parts: list[dict],
             {"role": "user", "content": parts},
         ],
     }
-    usage.tracker().check_allowed(provider.name)   # hard daily limit, if set
+    usage.require_free_model(provider)
+    usage.tracker().reserve(provider.name, provider.model)
     tok = _Tokens(provider)
     try:
         with requests.post(url, json=body, headers=headers,

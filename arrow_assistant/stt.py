@@ -76,7 +76,7 @@ def _transcribe_groq(wav_bytes: bytes, api_key: str | None) -> str:
     import requests
     from . import usage
     from .config import GROQ_WHISPER_MODEL
-    usage.tracker().check_allowed("groq")      # hard daily limit, if set
+    usage.tracker().reserve("groq", GROQ_WHISPER_MODEL, _wav_seconds(wav_bytes))
     resp = requests.post(
         "https://api.groq.com/openai/v1/audio/transcriptions",
         headers={"Authorization": f"Bearer {api_key}"},
@@ -84,8 +84,6 @@ def _transcribe_groq(wav_bytes: bytes, api_key: str | None) -> str:
         data={"model": "whisper-large-v3-turbo", "response_format": "text"},
         timeout=30,
     )
-    usage.tracker().record("groq", GROQ_WHISPER_MODEL,
-                           audio_seconds=_wav_seconds(wav_bytes))
     status = getattr(resp, "status_code", 200)
     if status in (402, 429):
         try:

@@ -68,7 +68,7 @@ def test_warn_at_80_and_100_once_each(tmp_path):
     assert alerts == []
     t.record("gemini", "m")                         # 8/10 = 80%
     assert len(alerts) == 1 and "80%" in alerts[0][0]
-    assert "malapit na sa daily limit ang Gemini" in alerts[0][1]
+    assert "malapit na sa Arrow warning budget ang Gemini" in alerts[0][1]
     t.record("gemini", "m")                         # 90%: nothing new
     assert len(alerts) == 1
     t.record("gemini", "m")                         # 100%
@@ -120,7 +120,7 @@ def test_quota_hit_notifies_once_per_day(tmp_path):
     t.quota_hit("gemini", '{"error":{"status":"RESOURCE_EXHAUSTED","message":"GenerateRequestsPerDay"}}')
     t.quota_hit("gemini", "again")
     assert len(alerts) == 1
-    assert "Free-tier quota reached for Gemini" in alerts[0][0]
+    assert "Rate limit reached for Gemini" in alerts[0][0]
     assert "midnight Pacific" in alerts[0][0]
     assert t.snapshot()["gemini"]["errors_429"] == 2
     t.quota_hit("openrouter", "")
@@ -129,16 +129,20 @@ def test_quota_hit_notifies_once_per_day(tmp_path):
     assert "payment required" in alerts[2][0]
 
 
-def test_io_errors_never_raise(tmp_path):
+def test_io_errors_stop_reservations(tmp_path):
     bad = tmp_path / "file-not-dir"
     bad.write_text("x")
     t = UsageTracker(path=str(bad / "usage.json"), today=Day(), env={})
-    t.record("gemini", "m", 1, 1)                   # cannot save: silently kept in memory
-    assert t.snapshot()["gemini"]["requests"] == 1
-    (tmp_path / "corrupt.json").write_text("{not json")
-    t2 = UsageTracker(path=str(tmp_path / "corrupt.json"), today=Day(), env={})
-    assert t2.snapshot() == {}
-    t2.record("gemini", "m")
+    with pytest.raises(UsageLimitReached):
+        t.reserve("gemini", "m")
+    with pytest.raises(UsageLimitReached):
+        t.snapshot()
+    path=tmp_path / "corrupt.json"
+    path.write_text("{not json")
+    t2 = UsageTracker(path=str(path), today=Day(), env={})
+    with pytest.raises(UsageLimitReached):
+        t2.reserve("gemini", "m")
+    assert path.read_text()=="{not json"
 
 
 def test_notifier_exception_is_swallowed(tmp_path):
@@ -195,8 +199,8 @@ def test_openrouter_key_warning():
     assert "spent $0.0123" in usage.openrouter_key_warning("k", "x:free", get=get_with(spent))
     paid = {"is_free_tier": False, "usage_daily": 0}
     assert "bought credits" in usage.openrouter_key_warning("k", "x:free", get=get_with(paid))
-    assert usage.openrouter_key_warning("k", "x", get=get_with({}, 401)) is None
+    assert "unknown" in usage.openrouter_key_warning("k", "x", get=get_with({}, 401))
     def boom(*a, **k):
         raise OSError("offline")
-    assert usage.openrouter_key_warning("k", "x", get=boom) is None
+    assert "unknown" in usage.openrouter_key_warning("k", "x", get=boom)
     assert usage.openrouter_key_warning("", "x", get=boom) is None

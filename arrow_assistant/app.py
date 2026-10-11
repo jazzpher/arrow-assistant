@@ -96,8 +96,11 @@ class ArrowApp(QObject):
 
     def _show_usage(self) -> None:
         from PyQt6.QtWidgets import QMessageBox
-        QMessageBox.information(None, "Arrow - usage today",
-                                usage.tracker().summary_text(self._configured_providers()))
+        try:
+            text = usage.tracker().summary_text(self._configured_providers())
+        except usage.UsageLimitReached as exc:
+            text = str(exc)
+        QMessageBox.information(None, "Arrow - usage today", text)
 
     def _check_openrouter(self) -> None:
         key = config.get_key("OPENROUTER_API_KEY")
