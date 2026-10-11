@@ -7,13 +7,13 @@ dry on a machine with no display.
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable
 
 from .actions import POINTER_KINDS, TOOL_WRITE_KINDS, Action
 from .activity import ActivityMonitor
 from .actlog import ActionLog
-from .approval import APPROVE, SKIP, STOP, ApprovalRequest, Approver
+from .approval import APPROVE, STOP, ApprovalRequest, Approver
 from .executor import ActionAborted
 from .observation import Observation, changed_fraction, point_in_rects
 from .panic import PanicStop, PanicSwitch

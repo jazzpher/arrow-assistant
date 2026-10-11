@@ -27,9 +27,9 @@ import json
 import os
 import threading
 import time
+from collections.abc import Callable
 from contextlib import contextmanager
 from functools import wraps
-from typing import Callable
 
 PROVIDERS = ("gemini", "openrouter", "nvidia", "groq")
 DISPLAY = {"gemini": "Gemini", "openrouter": "OpenRouter", "nvidia": "NVIDIA",
