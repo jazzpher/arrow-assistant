@@ -3,7 +3,7 @@ name: e2e-windows
 on:
   workflow_dispatch:
   push:
-    branches: [test/windows-e2e]
+    branches: [test/windows-e2e, test/hidpi-e2e]
 
 permissions:
   contents: write
@@ -16,6 +16,28 @@ jobs:
   e2e:
     runs-on: windows-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      max-parallel: 1          # one config at a time: free-tier Gemini pacing
+      matrix:
+        include:
+          # the runner as it comes (1024x768, 100%) - the config v0.1.1 passed on
+          - config: native
+            width: ""
+            height: ""
+            scale: "100"
+          # Full HD at 150%: resolution via ChangeDisplaySettingsEx, scaling via
+          # DisplayConfigSetDeviceInfo (live); falls back to QT_SCALE_FACTOR=1.5
+          # (recorded as "simulated") when the runner refuses the real DPI change.
+          - config: fhd150
+            width: "1920"
+            height: "1080"
+            scale: "150"
+    env:
+      E2E_CONFIG: ${{ matrix.config }}
+      E2E_WIDTH: ${{ matrix.width }}
+      E2E_HEIGHT: ${{ matrix.height }}
+      E2E_SCALE: ${{ matrix.scale }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -26,6 +48,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
+      - name: Configure display (${{ matrix.config }})
+        if: matrix.config != 'native'
+        shell: pwsh
+        run: python tests/e2e/set_display.py --width $env:E2E_WIDTH --height $env:E2E_HEIGHT --scale $env:E2E_SCALE --out e2e-out
       - name: Run Windows e2e checks
         id: e2e
         shell: pwsh
@@ -40,27 +66,40 @@ jobs:
           New-Item -ItemType Directory -Force e2e-out | Out-Null
           Move-Item e2e-out-console.txt e2e-out\console.txt -Force
           exit $code
-      - name: Publish results to e2e-results branch
+      - uses: actions/upload-artifact@v4
         if: always()
-        shell: pwsh
+        with:
+          name: e2e-out-${{ matrix.config }}
+          path: e2e-out
+
+  publish:
+    needs: e2e
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: arts
+      - name: Publish results to e2e-results branch
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if (-not (Test-Path e2e-out)) { Write-Output "::error::no e2e-out folder"; exit 1 }
-          $pub = Join-Path $env:RUNNER_TEMP "pub"
-          New-Item -ItemType Directory -Force "$pub\latest" | Out-Null
-          Copy-Item e2e-out\* "$pub\latest\" -Recurse -Force
-          "run_id=${{ github.run_id }} sha=${{ github.sha }} ref=${{ github.ref_name }}" | Set-Content "$pub\latest\RUN.txt"
-          Set-Location $pub
+          set -e
+          ls arts || { echo "::error::no e2e artifacts"; exit 1; }
+          pub="$RUNNER_TEMP/pub"; mkdir -p "$pub/configs"
+          for d in arts/e2e-out-*; do
+            cfg="${d#arts/e2e-out-}"
+            mkdir -p "$pub/configs/$cfg"; cp -r "$d"/. "$pub/configs/$cfg/"
+          done
+          # latest/ keeps its old meaning (the native config) for existing readers
+          if [ -d "$pub/configs/native" ]; then mkdir -p "$pub/latest"; cp -r "$pub/configs/native"/. "$pub/latest/"; fi
+          echo "run_id=${{ github.run_id }} sha=${{ github.sha }} ref=${{ github.ref_name }}" | tee "$pub/RUN.txt"
+          [ -d "$pub/latest" ] && cp "$pub/RUN.txt" "$pub/latest/RUN.txt"
+          cd "$pub"
           git init -q -b e2e-results
           git config user.name "Hark"
           git config user.email "jazzauguis@gmail.com"
           git add -A
           git commit -q -m "e2e results for run ${{ github.run_id }}"
-          git push -q --force "https://x-access-token:$env:GH_TOKEN@github.com/${{ github.repository }}.git" e2e-results:e2e-results
-          Write-Output "::notice title=e2e artifacts::https://raw.githubusercontent.com/${{ github.repository }}/e2e-results/latest/results.json"
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: e2e-out
-          path: e2e-out
+          git push -q --force "https://x-access-token:$GH_TOKEN@github.com/${{ github.repository }}.git" e2e-results:e2e-results
+          echo "::notice title=e2e artifacts::https://raw.githubusercontent.com/${{ github.repository }}/e2e-results/configs/<config>/results.json"

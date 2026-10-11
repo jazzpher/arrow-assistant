@@ -160,11 +160,34 @@ def check_overlay(qapp, target):
             if abs(r - 37) < 30 and abs(g - 99) < 30 and abs(bb - 235) < 30:
                 xs.append(x); ys.append(y)
     blue_bbox = [min(xs), min(ys), max(xs), max(ys)] if xs else None
-    ok = blue > 40 and changed > 60
+    # the drawn arrow only: arrow-blue pixels that were NOT there before
+    # (the runner wallpaper is blue too, so a plain colour bbox is the screen)
+    prev = before.convert("RGB").load()
+    ax, ay = [], []
+    for y in range(max(0, ly - 150), min(H, ly + 250)):
+        for x in range(max(0, lx - 150), min(W, lx + 250)):
+            r, g, bb = px[x, y]
+            if abs(r - 37) < 30 and abs(g - 99) < 30 and abs(bb - 235) < 30:
+                q = prev[x, y]
+                if abs(q[0] - r) + abs(q[1] - g) + abs(q[2] - bb) > 60:
+                    ax.append(x); ay.append(y)
+    arrow_bbox = [min(ax), min(ay), max(ax), max(ay)] if ax else None
+    dpr = max([d for _n, _g, d in screens] or [1.0])
+    tip_off = size = ratio = None
+    if arrow_bbox:
+        # the blue fill starts just inside the 3-px white outline, so the
+        # fill's top-left sits a few px right/below the true tip
+        tip_off = [arrow_bbox[0] - lx, arrow_bbox[1] - ly]
+        size = [arrow_bbox[2] - arrow_bbox[0] + 1, arrow_bbox[3] - arrow_bbox[1] + 1]
+        ratio = round(size[1] / 36.0, 2)   # fill is ~36 logical px tall at DPR 1
+    tip_ok = bool(tip_off) and -3 <= tip_off[0] <= 6 * dpr and -3 <= tip_off[1] <= 8 * dpr
+    ok = blue > 40 and changed > 60 and tip_ok
     record("overlay_arrow", ok,
            f"target=({cx},{cy}) blue_px_in_box={blue} changed_px={changed} "
-           f"blue_bbox_on_screen={blue_bbox} screens={screens} mon={mon}",
-           target=[cx, cy], blue_bbox=blue_bbox)
+           f"arrow_bbox={arrow_bbox} tip_offset_px={tip_off} arrow_size_px={size} "
+           f"size_vs_dpr1={ratio} (expect ~{dpr}) screens={screens} mon={mon}",
+           target=[cx, cy], blue_bbox=blue_bbox, arrow_bbox=arrow_bbox,
+           tip_offset=tip_off, arrow_size=size, dpr=dpr)
 
 
 def check_tts():
@@ -387,6 +410,47 @@ def check_real_model(qapp, data):
            accuracy=f"{hits}/{len(rows)}", rows=rows)
 
 
+def check_display(qapp):
+    """What the runner REALLY gave us vs what this config asked for."""
+    from arrow_assistant import capture
+    sys.path.insert(0, str(Path(__file__).parent))
+    from set_display import primary_dpi
+    want_w = int(os.environ.get("E2E_WIDTH") or 0)
+    want_h = int(os.environ.get("E2E_HEIGHT") or 0)
+    want_scale = int(os.environ.get("E2E_SCALE") or 100)
+    mons = capture.list_monitors()
+    m = mons[0]
+    dpi = primary_dpi()
+    real_scale = round(dpi[0] / 96 * 100)
+    qt_sf = os.environ.get("QT_SCALE_FACTOR") or os.environ.get("QT_SCREEN_SCALE_FACTORS") or ""
+    screens = [{"name": s.name(), "geometry": list(s.geometry().getRect()),
+                "dpr": s.devicePixelRatio(), "logical_dpi": round(s.logicalDotsPerInch(), 1),
+                "physical_dpi": round(s.physicalDotsPerInch(), 1)} for s in qapp.screens()]
+    dpr = screens[0]["dpr"] if screens else 1.0
+    res_ok = (not want_w) or (m["width"] == want_w and m["height"] == want_h)
+    if real_scale == want_scale:
+        mode = "real"
+    elif qt_sf and abs(dpr * 100 - want_scale) < 1:
+        mode = f"simulated (QT_SCALE_FACTOR={qt_sf}; Windows DPI stayed {dpi[0]})"
+    else:
+        mode = "not achieved"
+    setup = {}
+    f = OUT / "display_setup.json"
+    if f.is_file():
+        setup = json.loads(f.read_text(encoding="utf-8"))
+    info = {"config": os.environ.get("E2E_CONFIG", "native"),
+            "requested": {"w": want_w or None, "h": want_h or None, "scale": want_scale},
+            "actual": {"w": m["width"], "h": m["height"], "windows_dpi": dpi,
+                       "windows_scale_percent": real_scale, "qt_dpr": dpr},
+            "scaling_mode": mode, "monitors": len(mons), "qt_screens": screens}
+    (OUT / "display_config.json").write_text(json.dumps({**info, "setup": setup}, indent=2),
+                                            encoding="utf-8")
+    record("display_config", res_ok and mode != "not achieved",
+           f"{info['config']}: requested {want_w or '-'}x{want_h or '-'}@{want_scale}% -> "
+           f"actual {m['width']}x{m['height']} windows_dpi={dpi} ({real_scale}%) qt_dpr={dpr} "
+           f"scaling={mode} monitors={len(mons)}", **info)
+
+
 # ---------------------------------------------------------------------------
 def main() -> int:
     global OUT
@@ -403,6 +467,7 @@ def main() -> int:
     from arrow_assistant import capture    # then the DPI call
     capture.set_dpi_awareness()
 
+    run_check("display_config", lambda: check_display(qapp))
     proc, win = run_check("notepad_launch", launch_notepad) or (None, None)
     shot = run_check("screenshot", lambda: screenshot_primary("screen_notepad.png"))
     if shot:
@@ -432,6 +497,7 @@ def main() -> int:
     failed = [r for r in RESULTS if r["status"] == "fail"]
     (OUT / "results.json").write_text(json.dumps({
         "run_id": os.environ.get("GITHUB_RUN_ID"), "sha": os.environ.get("GITHUB_SHA"),
+        "config": os.environ.get("E2E_CONFIG", "native"),
         "python": sys.version.split()[0], "passed": len([r for r in RESULTS if r["status"] == "pass"]),
         "failed": len(failed), "skipped": len([r for r in RESULTS if r["status"] == "skip"]),
         "checks": RESULTS}, indent=2, ensure_ascii=False), encoding="utf-8")
