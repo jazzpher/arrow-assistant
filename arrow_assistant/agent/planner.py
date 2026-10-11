@@ -7,10 +7,9 @@ sent in headers, never in URLs, so they cannot leak into error text.
 """
 from __future__ import annotations
 
-import json
 import time
-from dataclasses import dataclass, field
-from typing import Callable
+from collections.abc import Callable
+from dataclasses import dataclass
 
 import requests
 
