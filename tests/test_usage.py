@@ -24,7 +24,7 @@ def make(tmp_path, env=None, day=None):
 
 
 def test_budget_defaults_and_overrides():
-    assert usage.budget("request_warn", "gemini", {}) == 100
+    assert usage.budget("request_warn", "gemini", {}) == 20
     assert usage.budget("request_limit", "gemini", {}) == 0          # hard stop off
     assert usage.budget("token_warn", "groq", {}) == 0
     env = {"ARROW_DAILY_REQUEST_WARN": "50", "ARROW_DAILY_REQUEST_WARN_GEMINI": "10",
@@ -172,7 +172,7 @@ def test_summary_text_lists_configured_providers(tmp_path):
     t, _ = make(tmp_path, env={"ARROW_DAILY_REQUEST_LIMIT_GEMINI": "500"})
     t.record("gemini", "gemini-3.8-flash", 100, 20)
     txt = t.summary_text(["gemini", "groq"])
-    assert "Gemini: 1 requests (warn 100, limit 500)" in txt
+    assert "Gemini: 1 requests (warn 20, limit 500)" in txt
     assert "120 tokens" in txt and "Groq: 0 requests" in txt
 
 

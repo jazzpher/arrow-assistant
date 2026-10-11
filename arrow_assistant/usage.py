@@ -32,8 +32,11 @@ DISPLAY = {"gemini": "Gemini", "openrouter": "OpenRouter", "nvidia": "NVIDIA",
            "groq": "Groq"}
 
 # Conservative defaults (requests per local day). Deliberately low so the
-# warning comes well before a typical free tier runs out. Not provider facts.
-DEFAULT_REQUEST_WARN = {"gemini": 100, "openrouter": 40, "nvidia": 300, "groq": 500}
+# warning comes early. Not provider facts: e.g. in our CI (Oct 2026) a free
+# AI Studio key on gemini-3.8-flash started answering 429 after roughly 20
+# requests in a day, while other models/projects get more. Check
+# aistudio.google.com/rate-limit and raise ARROW_DAILY_REQUEST_WARN_GEMINI.
+DEFAULT_REQUEST_WARN = {"gemini": 20, "openrouter": 40, "nvidia": 300, "groq": 500}
 DEFAULT_TOKEN_WARN = 1_000_000     # LLM providers; Groq STT counts audio, not tokens
 WARN_LEVELS = (80, 100)            # percent of the warn budget
 KEEP_DAYS = 14
