@@ -18,7 +18,7 @@ class Frame:
     scale: float         # model px per screen px (<= 1.0)
 
     @classmethod
-    def for_monitor(cls, mon: dict, max_edge: int = MAX_EDGE) -> "Frame":
+    def for_monitor(cls, mon: dict, max_edge: int = MAX_EDGE) -> Frame:
         s = min(1.0, max_edge / max(mon["width"], mon["height"]))
         return cls(dict(mon), s)
 

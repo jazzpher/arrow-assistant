@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import threading
-from typing import Callable
+from collections.abc import Callable
 
 from .loop import AgentLoop, AgentResult
 from .panic import PanicSwitch

@@ -4,7 +4,6 @@ from __future__ import annotations
 from PyQt6.QtGui import QAction, QColor, QIcon, QPainter, QPixmap
 from PyQt6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
-
 STATUS_COLORS = {
     "idle": QColor(37, 99, 235),        # blue
     "listening": QColor(220, 38, 38),   # red while the hotkey is held

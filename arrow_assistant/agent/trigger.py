@@ -12,9 +12,9 @@ from dataclasses import dataclass
 _TRIGGER = re.compile(
     r"^\s*(?:hey|hi|ok|okay|uy|oy)?[\s,]*(?:arrow|aro|arrows|aroh)[\s,.:;-]*"
     r"(?:agent mode|agents|agent|ajent|ahente|edgent)\b[\s,.:;-]*(?P<rest>.*)$",
-    re.I | re.S)
-_STOP = re.compile(r"^(stop|itigil|tigil|huwag na|cancel|abort)\b", re.I)
-_CONTINUE = re.compile(r"^(continue|resume|ituloy|tuloy|go on)\b", re.I)
+    re.IGNORECASE | re.DOTALL)
+_STOP = re.compile(r"^(stop|itigil|tigil|huwag na|cancel|abort)\b", re.IGNORECASE)
+_CONTINUE = re.compile(r"^(continue|resume|ituloy|tuloy|go on)\b", re.IGNORECASE)
 
 
 @dataclass(frozen=True)

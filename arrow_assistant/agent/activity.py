@@ -6,7 +6,7 @@ the agent pauses instead of fighting them.
 """
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 
 class ActivityMonitor:

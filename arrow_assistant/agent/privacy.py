@@ -36,7 +36,7 @@ def ensure_console(input_fn=input, out=print) -> bool:
         return True
     out(NOTICE)
     if not sys.stdin or not getattr(sys.stdin, "isatty", lambda: False)() and input_fn is input:
-        out(f"Not interactive. Run `python -m arrow_assistant.agent.privacy` once to accept.")
+        out("Not interactive. Run `python -m arrow_assistant.agent.privacy` once to accept.")
         return False
     if input_fn("Type YES to accept and continue: ").strip().upper() == "YES":
         record_ack()

@@ -6,8 +6,14 @@ tray menu ("API keys...").
 """
 from __future__ import annotations
 
-from PyQt6.QtWidgets import (QDialog, QDialogButtonBox, QFormLayout, QLabel,
-                             QLineEdit, QVBoxLayout)
+from PyQt6.QtWidgets import (
+    QDialog,
+    QDialogButtonBox,
+    QFormLayout,
+    QLabel,
+    QLineEdit,
+    QVBoxLayout,
+)
 
 from . import config
 

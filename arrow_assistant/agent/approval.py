@@ -6,8 +6,9 @@ unanswered request times out as SKIP, never as approval.
 from __future__ import annotations
 
 import queue
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable, Protocol
+from typing import Protocol
 
 APPROVE, SKIP, STOP = "approve", "skip", "stop"
 Point = tuple[int, int]

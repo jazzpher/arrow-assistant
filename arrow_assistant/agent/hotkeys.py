@@ -4,8 +4,6 @@ Same rule as teach mode: suppress=False, so typing is never blocked.
 """
 from __future__ import annotations
 
-from typing import Callable
-
 from ..hotkey import ComboTracker, parse_hotkey, token_from_pynput
 
 

@@ -1,7 +1,8 @@
 """Real screen observation on Windows (mss + Win32), behind a Protocol."""
 from __future__ import annotations
 
-from typing import Callable, Protocol
+from collections.abc import Callable
+from typing import Protocol
 
 from PIL import Image, ImageDraw
 
@@ -58,7 +59,8 @@ class WindowsScreen:
                 from .uia import annotate, elements_to_text
                 img = annotate(img, elements, frame)
                 elements_text = elements_to_text(elements)
-        import base64, io
+        import base64
+        import io
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=82)
         return Observation(
