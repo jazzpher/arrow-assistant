@@ -13,3 +13,4 @@ venv/
 /.build-venv/
 selftest.txt
 installed.txt
+!packaging/arrow.spec
