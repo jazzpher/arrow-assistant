@@ -417,9 +417,22 @@ def check_real_model(qapp, data):
     summary = "; ".join(f"{r['target']}: hit={r['hit']} ({r['point_space']}) alt_hit={r['alt_hit']} "
                         f"raw={r['points_model'][:1]} pt={r['points_screen'][:1]} rect={r['uia_rect']} "
                         f"t={r['total_s']}s{' ERR ' + r['error'] if r['error'] else ''}" for r in rows)
-    record("real_model_teach", hits >= 1 and not any(r["error"] for r in rows),
-           f"{provider.name}/{provider.model} accuracy {hits}/{len(rows)}; {summary}",
-           accuracy=f"{hits}/{len(rows)}", rows=rows)
+    quota = [r for r in rows if r["error"] and "HTTP 429" in r["error"]]
+    other_err = [r for r in rows if r["error"] and r not in quota]
+    answered = len(rows) - len(quota)
+    if answered == 0:
+        # the free key's quota is used up (still 429 after retries spanning
+        # >1 min, so not the per-minute limit): an environment problem, not a
+        # pointing bug. Reported as SKIP, never as a pass.
+        record("real_model_teach", None,
+               f"{provider.name}/{provider.model}: free-tier quota exhausted (HTTP 429 on every "
+               f"question after retries); no answers to judge. {summary}",
+               accuracy=f"0/{len(rows)} (quota)", rows=rows)
+        return
+    record("real_model_teach", hits >= 1 and not other_err,
+           f"{provider.name}/{provider.model} accuracy {hits}/{answered} answered"
+           f"{f' ({len(quota)} unanswered: 429 quota)' if quota else ''}; {summary}",
+           accuracy=f"{hits}/{answered}", rows=rows)
 
 
 def check_display(qapp):
