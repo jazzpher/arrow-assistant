@@ -179,6 +179,8 @@ def main() -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     rep: dict = {"requested": {"w": a.width, "h": a.height, "scale": a.scale}}
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        raise SystemExit("Display changes are CI-only; refusing to alter a local PC")
     if sys.platform != "win32":
         print("not Windows; nothing to do")
         return 0
