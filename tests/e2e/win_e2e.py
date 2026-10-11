@@ -421,11 +421,11 @@ def check_real_model(qapp, data):
     other_err = [r for r in rows if r["error"] and r not in quota]
     answered = len(rows) - len(quota)
     if answered == 0:
-        # the free key's quota is used up (still 429 after retries spanning
-        # >1 min, so not the per-minute limit): an environment problem, not a
-        # pointing bug. Reported as SKIP, never as a pass.
+        # the free key is rate-limited (still 429 after retries spanning a few
+        # minutes): an environment problem, not a pointing bug. Reported as
+        # SKIP, never as a pass.
         record("real_model_teach", None,
-               f"{provider.name}/{provider.model}: free-tier quota exhausted (HTTP 429 on every "
+               f"{provider.name}/{provider.model}: free-tier rate limit (HTTP 429 on every "
                f"question after retries); no answers to judge. {summary}",
                accuracy=f"0/{len(rows)} (quota)", rows=rows)
         return
