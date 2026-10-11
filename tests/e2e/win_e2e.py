@@ -352,7 +352,7 @@ def check_real_model(qapp, data):
         s = capture.scale_factor(img, mon)
         enc_w, enc_h = capture.encoded_size(img)
         retries = 0
-        while True:   # one retry on a network timeout only (not on wrong answers)
+        while True:   # retried only on transient errors (below)
             t0 = time.monotonic()
             first = None
             chunks = []
@@ -365,10 +365,14 @@ def check_real_model(qapp, data):
                     chunks.append(chunk)
             except Exception as exc:  # noqa: BLE001
                 err = f"{type(exc).__name__}: {str(exc)[:200]}"
-                if retries < 1 and ("Timeout" in type(exc).__name__
-                                    or "ConnectionError" in type(exc).__name__):
+                # transient provider/network trouble only, never a wrong answer:
+                # free-tier 429 (per-minute), 5xx overload, timeouts
+                transient = ("Timeout" in type(exc).__name__ or "ConnectionError" in
+                             type(exc).__name__ or any(f"HTTP {c}" in str(exc) for c in
+                                                       (429, 500, 502, 503, 504)))
+                if transient and retries < 2:
                     retries += 1
-                    time.sleep(5)
+                    time.sleep(35 if "429" in str(exc) else 10)
                     continue
             break
         total = time.monotonic() - t0
@@ -406,7 +410,7 @@ def check_real_model(qapp, data):
                      "error": err, "retries": retries,
                      "first_chunk_s": round(first, 2) if first is not None else None,
                      "total_s": round(total, 2), "image": [enc_w, enc_h], "scale": s})
-        time.sleep(4)   # free-tier pacing
+        time.sleep(13)  # free-tier pacing: stay under ~5 requests/minute
     (OUT / "real_model.json").write_text(json.dumps(
         {"provider": provider.name, "model": provider.model, "margin_px": MARGIN, "rows": rows},
         indent=2, ensure_ascii=False), encoding="utf-8")
