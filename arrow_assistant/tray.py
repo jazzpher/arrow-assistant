@@ -31,7 +31,8 @@ def _make_icon(status: str = "idle") -> QIcon:
 
 
 class Tray:
-    def __init__(self, app: QApplication, hotkey: str, on_quit, on_keys=None):
+    def __init__(self, app: QApplication, hotkey: str, on_quit, on_keys=None,
+                 on_usage=None):
         self.tray = QSystemTrayIcon(_make_icon(), app)
         self.tray.setToolTip(f"Arrow Assistant - hold {hotkey} and ask")
         menu = QMenu()
@@ -43,6 +44,10 @@ class Tray:
             keys_action = QAction("API keys...", menu)
             keys_action.triggered.connect(on_keys)
             menu.addAction(keys_action)
+        if on_usage is not None:
+            usage_action = QAction("Usage today...", menu)
+            usage_action.triggered.connect(on_usage)
+            menu.addAction(usage_action)
         quit_action = QAction("Quit", menu)
         quit_action.triggered.connect(on_quit)
         menu.addAction(quit_action)

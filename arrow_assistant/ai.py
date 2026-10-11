@@ -17,6 +17,7 @@ from typing import Iterator
 
 import requests
 
+from . import usage
 from .config import LLMProvider
 
 SYSTEM_PROMPT = """You are Arrow, a friendly screen-aware assistant on Windows.
@@ -134,7 +135,41 @@ def _check(resp, name: str) -> None:
     (requests' own message contains the full URL), so a 429/500 can
     never put an API key into the logs."""
     if resp.status_code >= 400:
+        if resp.status_code in (402, 429):
+            body = ""
+            try:
+                body = (resp.text or "")[:300]
+            except Exception:  # noqa: BLE001
+                pass
+            usage.tracker().quota_hit(name, body, resp.status_code)
+            if resp.status_code == 429:
+                raise RuntimeError(f"{name} free-tier quota reached (HTTP 429); "
+                                   "try again later")
         raise RuntimeError(f"{name} request failed: HTTP {resp.status_code}")
+
+
+class _Tokens:
+    """Collects the usage numbers a streamed response reports (usually in
+    its last chunk) and records one request when the stream ends."""
+
+    def __init__(self, provider: LLMProvider):
+        self.provider = provider
+        self.counts = (0, 0, 0)
+        self.sent = False   # True once the provider answered (counts toward quota)
+
+    def see_gemini(self, data: dict) -> None:
+        if isinstance(data, dict) and data.get("usageMetadata"):
+            self.counts = usage.tokens_from_gemini(data)
+
+    def see_openai(self, data: dict) -> None:
+        if isinstance(data, dict) and data.get("usage"):
+            self.counts = usage.tokens_from_openai(data)
+
+    def record(self) -> None:
+        if not self.sent:
+            return
+        p, c, t = self.counts
+        usage.tracker().record(self.provider.name, self.provider.model, p, c, t)
 
 
 def stream_answer(provider: LLMProvider, question: str, app: str,
@@ -173,23 +208,34 @@ def _stream_gemini(provider: LLMProvider, parts: list[dict],
         "contents": _to_gemini_contents(parts),
         "generationConfig": gemini_generation_config(provider.model, 400, 0.4),
     }
-    with requests.post(url, json=body, headers=headers, stream=True,
-                       timeout=timeout) as resp:
-        _check(resp, provider.name)
-        for line in resp.iter_lines(decode_unicode=True):
-            if not line or not line.startswith("data:"):
-                continue
-            payload = line[5:].strip()
-            if payload == "[DONE]":
-                break
-            try:
-                data = json.loads(payload)
-                for cand in data.get("candidates", []):
-                    for part in cand.get("content", {}).get("parts", []):
-                        if "text" in part and not part.get("thought"):
-                            yield part["text"]
-            except json.JSONDecodeError:
-                continue
+    usage.tracker().check_allowed(provider.name)   # hard daily limit, if set
+    tok = _Tokens(provider)
+    try:
+        with requests.post(url, json=body, headers=headers, stream=True,
+                           timeout=timeout) as resp:
+            tok.sent = True
+            _check(resp, provider.name)
+            yield from _gemini_sse(resp, tok)
+    finally:
+        tok.record()
+
+
+def _gemini_sse(resp, tok: _Tokens) -> Iterator[str]:
+    for line in resp.iter_lines(decode_unicode=True):
+        if not line or not line.startswith("data:"):
+            continue
+        payload = line[5:].strip()
+        if payload == "[DONE]":
+            break
+        try:
+            data = json.loads(payload)
+            tok.see_gemini(data)
+            for cand in data.get("candidates", []):
+                for part in cand.get("content", {}).get("parts", []):
+                    if "text" in part and not part.get("thought"):
+                        yield part["text"]
+        except json.JSONDecodeError:
+            continue
 
 
 def _stream_openai_compat(provider: LLMProvider, parts: list[dict],
@@ -208,20 +254,34 @@ def _stream_openai_compat(provider: LLMProvider, parts: list[dict],
             {"role": "user", "content": parts},
         ],
     }
-    with requests.post(url, json=body, headers=headers,
-                       stream=True, timeout=timeout) as resp:
-        _check(resp, provider.name)
-        for line in resp.iter_lines(decode_unicode=True):
-            if not line or not line.startswith("data:"):
-                continue
-            payload = line[5:].strip()
-            if payload == "[DONE]":
-                break
-            try:
-                data = json.loads(payload)
-                for choice in data.get("choices", []):
-                    delta = choice.get("delta", {})
-                    if delta.get("content"):
-                        yield delta["content"]
-            except json.JSONDecodeError:
-                continue
+    usage.tracker().check_allowed(provider.name)   # hard daily limit, if set
+    tok = _Tokens(provider)
+    try:
+        with requests.post(url, json=body, headers=headers,
+                           stream=True, timeout=timeout) as resp:
+            tok.sent = True
+            _check(resp, provider.name)
+            yield from _openai_sse(resp, tok)
+    finally:
+        tok.record()
+
+
+def _openai_sse(resp, tok: _Tokens) -> Iterator[str]:
+    for line in resp.iter_lines(decode_unicode=True):
+        if not line or not line.startswith("data:"):
+            continue
+        payload = line[5:].strip()
+        if payload == "[DONE]":
+            break
+        try:
+            data = json.loads(payload)
+            tok.see_openai(data)
+            err = data.get("error") if isinstance(data, dict) else None
+            if isinstance(err, dict) and err.get("code") == 429:   # mid-stream (OpenRouter)
+                usage.tracker().quota_hit(tok.provider.name, str(err.get("message", "")))
+            for choice in data.get("choices", []):
+                delta = choice.get("delta", {})
+                if delta.get("content"):
+                    yield delta["content"]
+        except json.JSONDecodeError:
+            continue
