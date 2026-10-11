@@ -13,9 +13,17 @@ POINTER_KINDS = ("click", "double_click", "right_click")
 PHYSICAL_KINDS = POINTER_KINDS + ("type", "key", "drag", "open_app")
 PASSIVE_KINDS = ("scroll", "wait")
 TERMINAL_KINDS = ("done", "ask_user", "fail")
-ALL_KINDS = frozenset(PHYSICAL_KINDS + PASSIVE_KINDS + TERMINAL_KINDS)
+# Tools run in code, not on the screen (see tools.py). They never touch the
+# mouse or keyboard, but write_file and powershell change the PC.
+TOOL_READ_KINDS = ("web_search", "web_fetch", "read_file", "list_files")
+TOOL_WRITE_KINDS = ("write_file", "powershell")
+TOOL_KINDS = TOOL_READ_KINDS + TOOL_WRITE_KINDS
+ALL_KINDS = frozenset(PHYSICAL_KINDS + PASSIVE_KINDS + TERMINAL_KINDS + TOOL_KINDS)
 
 MAX_TYPE_CHARS = 500
+MAX_WRITE_CHARS = 20000
+MAX_COMMAND_CHARS = 2000
+MAX_QUERY_CHARS = 300
 MAX_SCROLL = 20
 MAX_WAIT_S = 10.0
 MIN_WAIT_S = 0.2
@@ -47,6 +55,9 @@ class Action:
     seconds: float = 0.0
     app: str | None = None
     message: str | None = None
+    path: str | None = None    # read_file / write_file / list_files (workspace-relative)
+    url: str | None = None     # web_fetch
+    command: str | None = None # powershell
     thought: str = ""
     label: str = ""           # what the model says it is acting on
     risk_hint: str = "low"    # model's own opinion: low | medium | high
@@ -55,6 +66,10 @@ class Action:
     @property
     def is_physical(self) -> bool:
         return self.kind in PHYSICAL_KINDS
+
+    @property
+    def is_tool(self) -> bool:
+        return self.kind in TOOL_KINDS
 
     @property
     def is_terminal(self) -> bool:
@@ -83,12 +98,29 @@ class Action:
             return f"wait {self.seconds:g}s"
         if self.kind == "open_app":
             return f"open app '{self.app}'"
+        if self.kind == "web_search":
+            return f"web search \"{_short(self.text)}\""
+        if self.kind == "web_fetch":
+            return f"fetch {_short(self.url, 80)}"
+        if self.kind == "read_file":
+            return f"read file '{self.path}'"
+        if self.kind == "list_files":
+            return f"list files in '{self.path or '.'}'"
+        if self.kind == "write_file":
+            return f"write file '{self.path}' ({len(self.text or '')} chars)"
+        if self.kind == "powershell":
+            return f"run PowerShell: {_short(self.command, 120)}"
         return f"{self.kind}: {self.message or ''}".strip()
 
     def signature(self) -> tuple:
         """Identity used for repeat/stuck detection."""
         return (self.kind, self.element, self.x, self.y, self.text,
-                self.keys, self.amount, self.app)
+                self.keys, self.amount, self.app, self.path, self.url, self.command)
+
+
+def _short(value: str | None, n: int = 60) -> str:
+    v = (value or "").replace("\n", " ")
+    return v if len(v) <= n else v[:n - 3] + "..."
 
 
 def extract_json(raw: str) -> dict:
@@ -160,7 +192,10 @@ def parse_action(raw: str) -> Action:
     kind = {"press": "key", "hotkey": "key", "write": "type", "input": "type",
             "launch": "open_app", "open": "open_app", "finish": "done",
             "complete": "done", "doubleclick": "double_click",
-            "rightclick": "right_click"}.get(kind, kind)
+            "rightclick": "right_click", "search": "web_search",
+            "fetch": "web_fetch", "browse": "web_fetch", "read": "read_file",
+            "save_file": "write_file", "ls": "list_files",
+            "shell": "powershell", "run_command": "powershell"}.get(kind, kind)
     if kind not in ALL_KINDS:
         raise ActionParseError(f"unknown action kind: {kind!r}")
 
@@ -224,6 +259,40 @@ def parse_action(raw: str) -> Action:
         if not isinstance(app, str) or not app.strip() or len(app) > 60:
             raise ActionParseError("open_app needs an app name")
         return Action(app=app.strip(), **common)
+
+    if kind == "web_search":
+        q = obj.get("query") or obj.get("text")
+        if not isinstance(q, str) or not q.strip() or len(q) > MAX_QUERY_CHARS:
+            raise ActionParseError("web_search needs a query")
+        return Action(text=q.strip(), **common)
+
+    if kind == "web_fetch":
+        url = obj.get("url")
+        if not isinstance(url, str) or not re.match(r"^https?://", url.strip(), re.I) \
+                or len(url) > 2000:
+            raise ActionParseError("web_fetch needs an http(s) url")
+        return Action(url=url.strip(), **common)
+
+    if kind in ("read_file", "write_file", "list_files"):
+        path = obj.get("path") or obj.get("file")
+        if path is None and kind == "list_files":
+            path = "."
+        if not isinstance(path, str) or not path.strip() or len(path) > 260:
+            raise ActionParseError(f"{kind} needs a path")
+        if kind == "write_file":
+            text = obj.get("content", obj.get("text"))
+            if not isinstance(text, str):
+                raise ActionParseError("write_file needs content")
+            if len(text) > MAX_WRITE_CHARS:
+                raise ActionParseError(f"content longer than {MAX_WRITE_CHARS} chars")
+            return Action(path=path.strip(), text=text, **common)
+        return Action(path=path.strip(), **common)
+
+    if kind == "powershell":
+        cmd = obj.get("command") or obj.get("text")
+        if not isinstance(cmd, str) or not cmd.strip() or len(cmd) > MAX_COMMAND_CHARS:
+            raise ActionParseError("powershell needs a command")
+        return Action(command=cmd.strip(), **common)
 
     # done / ask_user / fail
     msg = obj.get("message") or obj.get("reason") or obj.get("text") or ""

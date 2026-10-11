@@ -10,7 +10,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Callable
 
-from .actions import POINTER_KINDS, Action
+from .actions import POINTER_KINDS, TOOL_WRITE_KINDS, Action
 from .activity import ActivityMonitor
 from .actlog import ActionLog
 from .approval import APPROVE, SKIP, STOP, ApprovalRequest, Approver
@@ -61,7 +61,8 @@ class AgentLoop:
                  sensitive: Callable[[str, str], bool] = lambda app, title: False,
                  store: StateStore | None = None,
                  config: LoopConfig | None = None,
-                 sleep: Callable[[float], None] = time.sleep):
+                 sleep: Callable[[float], None] = time.sleep,
+                 tools=None):
         self.screen = screen
         self.executor = executor
         self.planner = planner
@@ -76,6 +77,8 @@ class AgentLoop:
         self.cfg = config or LoopConfig()
         self._sleep = sleep
         self._focus_el = None   # element last clicked: the likely target of typing
+        self.tools = tools      # ToolRunner or None (no tools)
+        self._tool_output = ""
 
     # -- public --------------------------------------------------------------
     def run(self, task: str, resume: TaskState | None = None) -> AgentResult:
@@ -119,8 +122,9 @@ class AgentLoop:
         return self.screen.observe(self.ui.hud_rects())
 
     def _ctx(self, obs: Observation) -> PlanContext:
+        tools_text = self.tools.describe_for_prompt() if self.tools else ""
         return PlanContext(obs.image_b64, obs.app, obs.title, obs.frame.size,
-                           obs.elements_text)
+                           obs.elements_text, tools_text, self._tool_output)
 
     def _run(self, state: TaskState) -> AgentResult:
         cfg = self.cfg
@@ -184,6 +188,14 @@ class AgentLoop:
             if counters["repeat"] >= cfg.max_repeat:
                 self.log.step(n, action.describe(), "-", "stuck: same action repeated")
                 return AgentResult("stuck", "Paulit-ulit na yung action; huminto muna ako.", n, True)
+
+            # ---- tools (no mouse/keyboard) -----------------------------------------
+            if action.is_tool:
+                early = self._run_tool(action, state, n, prov, counters)
+                if early is not None:
+                    return early
+                obs = None
+                continue
 
             # ---- resolve targets ---------------------------------------------------
             pt, pt2, label, problem = self._resolve(action, obs)
@@ -338,6 +350,63 @@ class AgentLoop:
         return AgentResult("step_limit",
                            f"Umabot na sa {state.max_steps} steps. Sabihin mo 'ituloy' para dagdagan.",
                            state.step, True)
+
+    def _run_tool(self, action: Action, state: TaskState, n: int, prov: str,
+                  counters: dict) -> AgentResult | None:
+        """Gate, approve, and run one tool call. Returns a result only to stop."""
+        cfg = self.cfg
+        desc = action.describe()
+        if self.tools is None:
+            state.add(desc, "tools are not available in this session")
+            self.log.step(n, desc, "-", "no tools", (), prov)
+            counters["invalid"] += 1
+            if counters["invalid"] >= cfg.max_invalid:
+                return AgentResult("failed", "Walang tools sa session na ito.", n, True)
+            return None
+        assess = self.tools.assess(action)
+        if assess.blocked:
+            why = "; ".join(assess.reasons)
+            state.add(desc, f"BLOCKED by safety: {why}")
+            self.log.step(n, desc, "blocked", why, assess.reasons, prov)
+            self.ui.say(f"Hindi ko gagawin: {why}")
+            counters["blocked"] += 1
+            if counters["blocked"] >= cfg.max_blocked:
+                return AgentResult("blocked", f"Tinanggihan ng safety: {why}", n, True)
+            return None
+        needs = assess.confirm or (cfg.mode == "step" and action.kind in TOOL_WRITE_KINDS)
+        decision_txt = "auto"
+        if needs:
+            req = ApprovalRequest("action", desc, assess.reasons, assess.confirm,
+                                  None, n, state.max_steps)
+            decision = self.approver.request(req, cfg.approve_timeout_s)
+            if decision == STOP:
+                self.log.step(n, desc, "stop", "user stopped")
+                raise PanicStop("stopped at approval")
+            if decision != APPROVE:
+                state.add(desc, "user skipped this action")
+                self.log.step(n, desc, "skipped", "", assess.reasons, prov)
+                counters["skipped"] += 1
+                if counters["skipped"] >= cfg.max_skipped:
+                    return AgentResult("needs_user", "Madalas mong i-skip; huminto muna ako. "
+                                       "Sabihin mo kung ano gusto mong ibahin.", n, True)
+                return None
+            decision_txt = "approved"
+        self.panic.check()
+        result = self.tools.run(action)
+        self.panic.check()
+        self._tool_output = f"[{desc}]\n{result.output}"
+        state.add(desc, result.short())
+        self.log.step(n, desc, decision_txt, result.short(), assess.reasons, prov)
+        if result.ok:
+            counters["invalid"] = counters["blocked"] = 0
+        else:
+            counters["invalid"] += 1
+            if counters["invalid"] >= cfg.max_invalid:
+                return AgentResult("failed", f"Paulit-ulit na pumapalya ang tool: {result.short()}",
+                                   n, True)
+        if self.store:
+            self.store.save(state)
+        return None
 
     def _sensitive_result(self, state, obs) -> AgentResult:
         # The screenshot is never sent to a model while this window is up.

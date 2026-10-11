@@ -13,6 +13,7 @@ from .planner import Planner, ProviderChain
 from .risk import assess, is_sensitive_window
 from .screen import WindowsScreen
 from .state import StateStore
+from .tools import from_config as tools_from_config
 
 
 class AgentStack:
@@ -52,7 +53,8 @@ class AgentStack:
         return AgentLoop(self.screen, self._executor_factory(), self.planner,
                          self.approver, ui=self.ui, log=ActionLog(), panic=self.panic,
                          activity=ActivityMonitor(self.screen.cursor), risk=assess,
-                         sensitive=is_sensitive_window, store=self.store, config=cfg)
+                         sensitive=is_sensitive_window, store=self.store, config=cfg,
+                         tools=tools_from_config(self.dry_run))
 
     def _finished(self, result) -> None:
         pass   # HUD already shows the result via ui.finished

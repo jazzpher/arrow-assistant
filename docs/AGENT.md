@@ -22,6 +22,32 @@ It is separate, opt-in, and asks before it acts.
 Limits: `ARROW_AGENT_MAX_STEPS` (default 25; say "Arrow agent ituloy" to continue).
 `ARROW_AGENT_SCOPE=excel.exe,chrome.exe` makes any action outside those apps ask first.
 
+## Tools (no mouse or keyboard)
+
+Besides clicking and typing, the agent can use tools directly. They are faster and cheaper
+than driving the screen (still one model call per step).
+
+| tool | what it does | asks first? |
+| --- | --- | --- |
+| `web_search` | DuckDuckGo results (title, link, snippet), no key needed | no |
+| `web_fetch` | reads a **public** web page as plain text (private/LAN addresses are blocked, also after redirects) | no |
+| `list_files`, `read_file` | only inside the agent workspace | no |
+| `write_file` | only inside the agent workspace | in `step` mode, and always when it overwrites a file |
+| `powershell` | one command, run in the workspace, 60 s timeout | **always**, in every mode |
+
+- Workspace: `ARROW_AGENT_WORKSPACE` (default `Documents/Arrow Workspace`). Paths are resolved in code
+  and cannot leave it; absolute paths, `..` escapes and secret-looking files (`.env`, keys, `*.kdbx`,
+  cookies, `*password*`) are refused.
+- Turn groups on/off: `ARROW_AGENT_TOOLS=web,files,powershell` (default), e.g. `web,files` or `none`.
+- PowerShell that is destructive or dangerous is **blocked even if you approve**: recursive delete,
+  deleting outside the workspace, disk format, shutdown/sign-out, registry edits, execution policy or
+  Defender changes, `iex`/encoded or downloaded code, admin elevation, users/credentials, services and
+  scheduled tasks. The working folder is the workspace, but a command can still read or change other
+  places on your PC, so read every command before you approve it.
+- Tool results go back to the model as **data**, wrapped and labelled; instructions inside a web page
+  or file are ignored like on-screen text.
+- `--dry-run` runs read-only tools (search, fetch, read, list) but never writes files or runs PowerShell.
+
 ## Privacy (read before the first run)
 
 Every step sends a **screenshot of your screen to a cloud AI provider** (Gemini, NVIDIA, OpenRouter).
@@ -34,6 +60,8 @@ emails, documents and notifications that are visible still get uploaded.
 - Close private windows/tabs before starting. Prefer `ARROW_AGENT_SCOPE=notepad.exe,excel.exe` (app allowlist) or `--scope` on the console.
 - The first `--live` selftest runs on Notepad only (scope-limited) and asks you to close everything else. Do your first tests on synthetic, non-sensitive content.
 - `--dry-run` still sends screenshots to the model; it only skips clicking.
+- Tool results (search results, fetched pages, files you let it read, command output) are also sent to
+  the cloud model. Do not keep private files in the agent workspace.
 
 ## Safety (enforced in code, not just in the prompt)
 
