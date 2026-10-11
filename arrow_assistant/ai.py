@@ -43,13 +43,46 @@ Rules:
 """
 
 
+# Gemini is trained to locate things on a 0-1000 grid and keeps doing so even
+# when told to use pixels: on a real 1024x768 Notepad shot (e2e run
+# 38111522159) every point it gave matched the target only when read as
+# 0-1000 (y ~24 px too low as pixels; x off by up to 57% on a 1568-px-wide
+# image). So for Gemini we ask for that grid on purpose and convert in code.
+_PIXEL_RULE = """- Emit literal tags (max 3) using INTEGER pixel coordinates in the provided
+  screenshot, not percentages, normalized 0-1/0-1000 coordinates, or desktop
+  coordinates: [POINT:x,y:short label]
+  Example for a target at pixel (120,80): [POINT:120,80:File] This is File.
+"""
+_NORM_RULE = """- Emit literal tags (max 3) using INTEGER coordinates normalized to 0-1000
+  (x = 0 left edge .. 1000 right edge, y = 0 top .. 1000 bottom of the
+  screenshot), x first, then y: [POINT:x,y:short label]
+  Example for a target 6% from the left and 10% from the top:
+  [POINT:60,100:File] This is File.
+"""
+GEMINI_SYSTEM_PROMPT = SYSTEM_PROMPT.replace(_PIXEL_RULE, _NORM_RULE)
+assert GEMINI_SYSTEM_PROMPT != SYSTEM_PROMPT
+
+
+def point_space(provider: LLMProvider | None) -> str:
+    """'norm1000' when POINT tags from this provider are on a 0-1000 grid,
+    else 'pixels' (screenshot pixels)."""
+    return "norm1000" if getattr(provider, "name", None) == "gemini" else "pixels"
+
+
+def system_prompt(provider: LLMProvider | None) -> str:
+    return GEMINI_SYSTEM_PROMPT if point_space(provider) == "norm1000" else SYSTEM_PROMPT
+
+
 def build_user_content(question: str, app: str, memory: str,
                        kb_text: str | None, include_image: bool,
                        image_b64: str | None,
-                       image_size: tuple[int, int] | None = None) -> list[dict]:
+                       image_size: tuple[int, int] | None = None,
+                       space: str = "pixels") -> list[dict]:
     """Assemble the multimodal user message (OpenAI content-part shape)."""
     ctx = [f"The focused app is: {app}", f"The user asks: {question}"]
-    if image_size and include_image:
+    if include_image and space == "norm1000":
+        ctx.append("POINT coordinates are normalized 0-1000 over the screenshot.")
+    elif image_size and include_image:
         ctx.append(f"The screenshot is {image_size[0]}x{image_size[1]} px. "
                    f"POINT coordinates must be inside it.")
     if memory:
@@ -111,7 +144,8 @@ def stream_answer(provider: LLMProvider, question: str, app: str,
                   image_size: tuple[int, int] | None = None) -> Iterator[str]:
     """Yield streamed text chunks of the model's answer."""
     parts = build_user_content(question, app, memory, kb_text,
-                               bool(image_b64), image_b64, image_size)
+                               bool(image_b64), image_b64, image_size,
+                               space=point_space(provider))
     if provider.name == "gemini":
         yield from _stream_gemini(provider, parts, timeout)
     else:
@@ -135,7 +169,7 @@ def _stream_gemini(provider: LLMProvider, parts: list[dict],
            f"{provider.model}:streamGenerateContent?alt=sse")
     headers = {"x-goog-api-key": provider.api_key}  # never put the key in the URL
     body = {
-        "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+        "system_instruction": {"parts": [{"text": system_prompt(provider)}]},
         "contents": _to_gemini_contents(parts),
         "generationConfig": gemini_generation_config(provider.model, 400, 0.4),
     }

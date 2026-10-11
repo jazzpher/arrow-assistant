@@ -1,0 +1,66 @@
+name: e2e-windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [test/windows-e2e]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: e2e-windows
+  cancel-in-progress: false
+
+jobs:
+  e2e:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          architecture: x64
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+      - name: Run Windows e2e checks
+        id: e2e
+        shell: pwsh
+        env:
+          ARROW_SKIP_SETUP: "1"
+          ARROW_AGENT_PRIVACY_OK: "1"
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          if (-not $env:GEMINI_API_KEY) { Write-Output "::notice title=e2e real_model_teach::GEMINI_API_KEY secret is not set; the real-model check will be skipped" }
+          python tests/e2e/win_e2e.py --out e2e-out *>&1 | Tee-Object -FilePath e2e-out-console.txt
+          $code = $LASTEXITCODE
+          New-Item -ItemType Directory -Force e2e-out | Out-Null
+          Move-Item e2e-out-console.txt e2e-out\console.txt -Force
+          exit $code
+      - name: Publish results to e2e-results branch
+        if: always()
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if (-not (Test-Path e2e-out)) { Write-Output "::error::no e2e-out folder"; exit 1 }
+          $pub = Join-Path $env:RUNNER_TEMP "pub"
+          New-Item -ItemType Directory -Force "$pub\latest" | Out-Null
+          Copy-Item e2e-out\* "$pub\latest\" -Recurse -Force
+          "run_id=${{ github.run_id }} sha=${{ github.sha }} ref=${{ github.ref_name }}" | Set-Content "$pub\latest\RUN.txt"
+          Set-Location $pub
+          git init -q -b e2e-results
+          git config user.name "Hark"
+          git config user.email "jazzauguis@gmail.com"
+          git add -A
+          git commit -q -m "e2e results for run ${{ github.run_id }}"
+          git push -q --force "https://x-access-token:$env:GH_TOKEN@github.com/${{ github.repository }}.git" e2e-results:e2e-results
+          Write-Output "::notice title=e2e artifacts::https://raw.githubusercontent.com/${{ github.repository }}/e2e-results/latest/results.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-out
+          path: e2e-out
