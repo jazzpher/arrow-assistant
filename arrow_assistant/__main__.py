@@ -29,8 +29,9 @@ def self_test(out_path: str | None = None) -> int:
         for m in mods:
             importlib.import_module(m)
         import keyring
-        backend = type(keyring.get_keyring()).__name__
-        if sys.platform == "win32" and "Windows" not in backend:
+        kr = type(keyring.get_keyring())
+        backend = kr.__name__
+        if sys.platform == "win32" and kr.__module__ != "keyring.backends.Windows":
             raise RuntimeError(f"keyring backend is {backend}, expected WinVaultKeyring")
         lines.append(f"OK arrow {__version__} python {sys.version.split()[0]} keyring {backend}")
     except Exception as exc:  # report, don't crash, so CI sees the reason
