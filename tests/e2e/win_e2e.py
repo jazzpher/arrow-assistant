@@ -351,18 +351,26 @@ def check_real_model(qapp, data):
         image_b64 = capture.encode_for_model(img)
         s = capture.scale_factor(img, mon)
         enc_w, enc_h = capture.encoded_size(img)
-        t0 = time.monotonic()
-        first = None
-        chunks = []
-        err = ""
-        try:
-            for chunk in ai.stream_answer(provider, question, app, "", kb.lookup(app), image_b64,
-                                          image_size=(enc_w, enc_h)):
-                if first is None:
-                    first = time.monotonic() - t0
-                chunks.append(chunk)
-        except Exception as exc:  # noqa: BLE001
-            err = f"{type(exc).__name__}: {str(exc)[:200]}"
+        retries = 0
+        while True:   # one retry on a network timeout only (not on wrong answers)
+            t0 = time.monotonic()
+            first = None
+            chunks = []
+            err = ""
+            try:
+                for chunk in ai.stream_answer(provider, question, app, "", kb.lookup(app),
+                                              image_b64, image_size=(enc_w, enc_h)):
+                    if first is None:
+                        first = time.monotonic() - t0
+                    chunks.append(chunk)
+            except Exception as exc:  # noqa: BLE001
+                err = f"{type(exc).__name__}: {str(exc)[:200]}"
+                if retries < 1 and ("Timeout" in type(exc).__name__
+                                    or "ConnectionError" in type(exc).__name__):
+                    retries += 1
+                    time.sleep(5)
+                    continue
+            break
         total = time.monotonic() - t0
         text = "".join(chunks)
         spoken, pts = parse_points(text)
@@ -395,7 +403,7 @@ def check_real_model(qapp, data):
                      "points_model": [[p.x, p.y, p.label] for p in pts],
                      "point_space": space, "points_screen": mapped, "hit": hit,
                      "alt_space": alt_space, "alt_points_screen": alt, "alt_hit": inside(alt),
-                     "error": err,
+                     "error": err, "retries": retries,
                      "first_chunk_s": round(first, 2) if first is not None else None,
                      "total_s": round(total, 2), "image": [enc_w, enc_h], "scale": s})
         time.sleep(4)   # free-tier pacing
