@@ -1,0 +1,50 @@
+{
+  "sha": "a60321c79f81647ec7fffd1039e406023661d7d8",
+  "config": "native",
+  "passed": 9,
+  "failed": 0,
+  "skipped": 1,
+  "checks": [
+    {
+      "check": "display_config",
+      "status": "pass"
+    },
+    {
+      "check": "notepad_launch",
+      "status": "pass"
+    },
+    {
+      "check": "screenshot",
+      "status": "pass"
+    },
+    {
+      "check": "uia_dump",
+      "status": "pass"
+    },
+    {
+      "check": "overlay_arrow",
+      "status": "pass"
+    },
+    {
+      "check": "tts_edge_miniaudio",
+      "status": "pass"
+    },
+    {
+      "check": "agent_dry_run",
+      "status": "pass"
+    },
+    {
+      "check": "agent_risk_gate",
+      "status": "pass"
+    },
+    {
+      "check": "real_model_teach",
+      "status": "skip"
+    },
+    {
+      "check": "app_tray_alive",
+      "status": "pass"
+    }
+  ],
+  "capability": "inconclusive"
+}
