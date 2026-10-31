@@ -251,8 +251,9 @@ def check_graphics(qapp):
     card2d.save(str(OUT / "graphics_card_2d.png"))
     mon, after2d = screenshot_primary("graphics_screen_2d.png")
     win.show_scene(scene3d)
-    pump(1200)
+    pump(1500)
     win.grab().toImage().save(str(OUT / "graphics_card_3d.png"))
+    mode3d = win.renderer_mode()          # gpu | cpu, whatever this PC got
     win.close_card()
     pump(300)
 
@@ -278,7 +279,7 @@ def check_graphics(qapp):
     ok = ok_vis and changed > need and blue > 500
     record("graphics_card", ok,
            f"changed_px={changed} need>{int(need)} blue_px_in_grab={blue} "
-           f"closed={ok_vis} box={box} mon={mon}")
+           f"closed={ok_vis} renderer_3d={mode3d} box={box} mon={mon}")
 
 
 def check_tts():
