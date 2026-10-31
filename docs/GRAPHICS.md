@@ -37,11 +37,15 @@ instead of starting over.
 
 ## Triggering
 
-Routing is keyword-based (deterministic, no extra model call): draw,
-sketch, diagram, chart, graph, 3D, visualize, render, blueprint,
-schematic, plus Tagalog/Taglish forms (iguhit, guhit, larawan, desenyo,
-pakita kung paano/hitsura). A question that only asks to point or explain
-takes the normal teach path. The graphics call goes through the same
+Routing is keyword-based (deterministic, no extra model call) and
+two-tiered. Strong words always trigger it: draw, sketch, diagram,
+flowchart, 3D, visualize, illustrate, blueprint, schematic, plus
+Tagalog/Taglish forms (iguhit, guhit, larawan, desenyo, pakita kung
+paano/hitsura). Weaker nouns - chart, graph, plot, visual - only trigger
+when the same sentence asks for one to be made or shown, so "what chart
+type should I use in Excel?" or "where is the chart button?" keep the
+normal pointing path. A question that only asks to point or explain never
+reaches the engine. The graphics call goes through the same
 provider chain, usage budgets, and free-model guard as everything else.
 
 ## Internals
