@@ -8,3 +8,4 @@ python-dotenv>=1.0.1
 keyring>=25.0
 PyQt6>=6.7.0
 miniaudio>=1.60         # Exercise the real in-memory MP3 decoder in regression tests
+moderngl>=5.12,<6   # GPU renderer (also pulls glcontext); required by the CI GL capability gate
