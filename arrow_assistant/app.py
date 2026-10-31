@@ -18,6 +18,9 @@ from .agent.hotkeys import AgentHotkeys
 from .agent.stack import AgentStack
 from .agent.trigger import parse_agent_request
 from .errlog import log_diagnostic, log_error
+from .graphics import engine as gfx_engine
+from .graphics import trigger as gfx_trigger
+from .graphics.window import GraphicsWindow
 from .hotkey import HotkeyListener
 from .memory import Memory
 from .overlay import ArrowOverlay
@@ -30,6 +33,7 @@ from .tts import Speaker
 
 class ArrowApp(QObject):
     show_points = pyqtSignal(list)
+    show_scene = pyqtSignal(object)     # graphics.spec.Scene, GUI-thread delivery
     status = pyqtSignal(str)
     error = pyqtSignal(str)
     usage_alert = pyqtSignal(str)   # budget / quota warnings (tray balloon)
@@ -52,6 +56,9 @@ class ArrowApp(QObject):
         self._speaker: Speaker | None = None
 
         self.show_points.connect(self.overlay.point_at)
+        self.graphics_window = GraphicsWindow()
+        self._gfx_scene = None          # current visual, for follow-ups
+        self.show_scene.connect(self._on_scene)
         self.tray = Tray(self._qt_app, config.hotkey(), self._quit, on_keys=self._edit_keys,
                          on_usage=self._show_usage)
         self.status.connect(self.tray.set_status)
@@ -222,6 +229,9 @@ class ArrowApp(QObject):
             if parse_agent_request(question) is not None:
                 self.handle_agent_text(question)   # "Arrow agent, ..." in teach mode
                 return
+            if gfx_trigger.wants_graphics(question):
+                self._graphics_pipeline(question, app, mem, image_b64, cancel)
+                return
 
             streamer = SentenceStreamer()
             tags = SpeechFilter()
@@ -284,6 +294,53 @@ class ArrowApp(QObject):
                 self._speaker = None
             if not cancel.is_set():
                 self.status.emit("idle")
+
+    def _on_scene(self, scene) -> None:   # GUI thread, via show_scene
+        self.graphics_window.show_scene(scene)
+
+    # -- graphics pipeline (worker thread) -----------------------------------
+    def _graphics_pipeline(self, question: str, app: str, mem: str,
+                           image_b64: str, cancel: threading.Event) -> None:
+        """Teach-mode visual: stream speech + a [SCENE] spec, render it.
+        Same speaker/cancel discipline as the pointing pipeline."""
+        speaker: Speaker | None = None
+        try:
+            streamer = SentenceStreamer()
+            speaker = Speaker()
+            self._speaker = speaker
+            speaker.start()
+            spoken: list[str] = []
+
+            def say(text: str) -> None:
+                spoken.append(text)
+                for sentence in streamer.feed(text):
+                    speaker.say(sentence)
+
+            result = gfx_engine.run(self.provider, question, app, mem,
+                                    image_b64, self._gfx_scene, say, cancel)
+            for sentence in streamer.flush():
+                speaker.say(sentence)
+            speaker.finish()
+            if result.scene is not None and not cancel.is_set():
+                log_diagnostic(
+                    f"graphics: kind={result.scene.kind} "
+                    f"items={len(result.scene.items)} "
+                    f"dropped={result.scene.dropped}")
+                self._gfx_scene = result.scene   # follow-ups build on it
+                self.show_scene.emit(result.scene)
+            else:
+                log_diagnostic("graphics: no usable scene in model output")
+            text = "".join(spoken).strip()
+            if text:
+                self.memory.record(app, question, text)
+            speaker.wait()
+        except usage.UsageLimitReached as exc:
+            self._report(str(exc))
+        except Exception as exc:  # a broken visual must never break teach
+            self._report(f"graphics error: {exc}")
+        finally:
+            if speaker is not None and self._speaker is speaker:
+                self._speaker = None
 
     def _quit(self) -> None:
         self.hotkey.stop()
