@@ -229,6 +229,25 @@ def project(point: geo3d.Vec, yaw: float, pitch: float, distance: float,
     return (cx + x * scale * f, cy - y * scale * f, z)
 
 
+def spread_labels(items: list[tuple[float, float, float, float]],
+                  max_rounds: int = 40) -> list[tuple[float, float, float, float]]:
+    """Greedy label de-overlap. items are (cx, cy, w, h); later entries are
+    shifted below/above their anchor until clear of everything placed."""
+    placed: list[tuple[float, float, float, float]] = []
+    for x, y, w_est, h_est in items:
+        y0 = y
+        for attempt in range(max_rounds):
+            clash = any(abs(x - px) < (w_est + pw) / 2
+                        and abs(y - py) < (h_est + ph) / 2
+                        for px, py, pw, ph in placed)
+            if not clash:
+                break
+            step = (attempt // 2 + 1) * h_est
+            y = y0 + step if attempt % 2 == 0 else y0 - step
+        placed.append((x, y, w_est, h_est))
+    return placed
+
+
 def render_3d(p: QPainter, scene: Scene, w: float, h: float,
               view: dict | None = None) -> None:
     v = dict(DEFAULT_VIEW)
@@ -259,13 +278,20 @@ def render_3d(p: QPainter, scene: Scene, w: float, h: float,
     for _, poly, col in polys:
         p.setBrush(col)
         p.drawPolygon(poly)
+    # Project first, then de-overlap: dense scenes stack labels on top of
+    # each other; spread_labels shifts later ones until they are clear.
+    pending = []
     for lb in labels:
         x, y, _ = project(tuple(lb["at"]), yaw, pitch, distance, cx, cy, scale)
-        # Labels are billboards: readable at any zoom, only mildly scaled.
-        p.setFont(_font(max(10.0, min(30.0, lb.get("size", 24) * 0.55)),
-                        bold=True))
+        fs = max(10.0, min(30.0, lb.get("size", 24) * 0.55))
+        w_est = max(40.0, len(lb["text"]) * fs * 0.62)
+        pending.append((lb, fs, x, y, w_est, fs * 1.5))
+    placed = spread_labels([(x, y, w_est, h_est)
+                            for _, _, x, y, w_est, h_est in pending])
+    for (lb, fs, x, _y, _w, h_est), (_px, y, _pw, _ph) in zip(pending, placed):
+        p.setFont(_font(fs, bold=True))
         p.setPen(QPen(_qcolor(lb.get("color", "#e2e8f0"))))
-        p.drawText(QRectF(x - 200, y - 14, 400, 28),
+        p.drawText(QRectF(x - 200, y - h_est / 2, 400, h_est),
                    int(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter
                        | Qt.TextFlag.TextSingleLine), lb["text"])
 
