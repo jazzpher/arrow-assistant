@@ -169,6 +169,18 @@ class _Tokens:
         usage.tracker().finish(self.provider.name, self.provider.model, self.counts)
 
 
+def stream_parts(provider: LLMProvider, parts: list[dict],
+                 timeout: int = 60, system: str | None = None,
+                 max_tokens: int = 400) -> Iterator[str]:
+    """Stream a custom-system-prompt call through the normal provider
+    plumbing (usage reservation, free-model guard, error handling)."""
+    if provider.name == "gemini":
+        yield from _stream_gemini(provider, parts, timeout, system, max_tokens)
+    else:
+        yield from _stream_openai_compat(provider, parts, timeout, system,
+                                         max_tokens)
+
+
 def stream_answer(provider: LLMProvider, question: str, app: str,
                   memory: str, kb_text: str | None,
                   image_b64: str | None,
@@ -196,14 +208,15 @@ def _to_gemini_contents(parts: list[dict]) -> list[dict]:
 
 
 def _stream_gemini(provider: LLMProvider, parts: list[dict],
-                   timeout: int) -> Iterator[str]:
+                   timeout: int, system: str | None = None,
+                   max_tokens: int = 400) -> Iterator[str]:
     url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
            f"{provider.model}:streamGenerateContent?alt=sse")
     headers = {"x-goog-api-key": provider.api_key}  # never put the key in the URL
     body = {
-        "system_instruction": {"parts": [{"text": system_prompt(provider)}]},
+        "system_instruction": {"parts": [{"text": system or system_prompt(provider)}]},
         "contents": _to_gemini_contents(parts),
-        "generationConfig": gemini_generation_config(provider.model, 400, 0.4),
+        "generationConfig": gemini_generation_config(provider.model, max_tokens, 0.4),
     }
     usage.require_free_model(provider)
     usage.tracker().reserve(provider.name, provider.model)
@@ -237,7 +250,8 @@ def _gemini_sse(resp, tok: _Tokens) -> Iterator[str]:
 
 
 def _stream_openai_compat(provider: LLMProvider, parts: list[dict],
-                          timeout: int) -> Iterator[str]:
+                          timeout: int, system: str | None = None,
+                          max_tokens: int = 400) -> Iterator[str]:
     url = f"{provider.base_url}/chat/completions"
     headers = {"Authorization": f"Bearer {provider.api_key}"}
     if provider.name == "openrouter":
@@ -245,10 +259,10 @@ def _stream_openai_compat(provider: LLMProvider, parts: list[dict],
     body = {
         "model": provider.model,
         "stream": True,
-        "max_tokens": 400,
+        "max_tokens": max_tokens,
         "temperature": 0.4,
         "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": system or SYSTEM_PROMPT},
             {"role": "user", "content": parts},
         ],
     }

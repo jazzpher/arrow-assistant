@@ -13,6 +13,7 @@ python-dotenv>=1.0.1    # Load keys from .env on first run
 keyring>=25.0           # Windows Credential Manager for API keys after setup
 edge-tts>=7.0.0         # Free neural text-to-speech, no API key needed
 miniaudio>=1.60         # MP3 decode for playback (prebuilt wheels, no ffmpeg needed)
+moderngl>=5.12,<6        # GPU 3D scene rendering (MIT); CPU fallback when no OpenGL 3.3
 
 # Optional local speech: install requirements-local.txt separately.
 # Keep CTranslate2 and other heavy native STT dependencies out of the default install.

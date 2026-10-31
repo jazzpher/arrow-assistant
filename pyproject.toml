@@ -17,6 +17,7 @@ dependencies = [
     "keyring>=25.0",
     "edge-tts>=7.0.0",
     "miniaudio>=1.60",
+    "moderngl>=5.12,<6",  # GPU scene rendering (MIT); CPU fallback without OpenGL 3.3
 ]
 
 [project.optional-dependencies]
