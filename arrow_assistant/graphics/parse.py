@@ -19,6 +19,12 @@ MARKER = "[SCENE]"
 _HOLD = len(MARKER) - 1
 
 
+def _find_marker(text: str) -> int:
+    """Index of the scene marker, case-insensitive (models sometimes emit
+    [scene] or [Scene]); -1 when absent."""
+    return text.lower().find(MARKER.lower())
+
+
 class SceneFilter:
     """feed(chunk) -> speech text safe to say out loud right now."""
 
@@ -31,7 +37,7 @@ class SceneFilter:
             self._buf += chunk
             return ""
         self._buf += chunk
-        idx = self._buf.find(MARKER)
+        idx = _find_marker(self._buf)
         if idx >= 0:
             self.seen_marker = True
             out = self._buf[:idx]
@@ -90,6 +96,20 @@ def extract_json_object(text: str) -> str | None:
     return None          # truncated stream: unbalanced
 
 
+def strip_spec_json(text: str) -> str:
+    """Remove an embedded scene object from text meant for TTS. Only strips
+    a balanced {...} that actually parses to a dict with an items list."""
+    obj = extract_json_object(text)
+    if obj:
+        try:
+            data = json.loads(obj)
+        except json.JSONDecodeError:
+            data = None
+        if isinstance(data, dict) and isinstance(data.get("items"), list):
+            text = text.replace(obj, " ")
+    return " ".join(text.split())
+
+
 def extract_spec(text: str) -> dict | None:
     """Full answer text -> parsed spec dict, or None when absent/broken.
 
@@ -98,7 +118,7 @@ def extract_spec(text: str) -> dict | None:
     an "items" list still produces a visual.
     """
     candidates = []
-    idx = text.find(MARKER)
+    idx = _find_marker(text)
     if idx >= 0:
         candidates.append(text[idx + len(MARKER):])
     candidates.append(text)
