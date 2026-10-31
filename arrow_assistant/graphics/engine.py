@@ -45,12 +45,16 @@ JSON shape:
 - {"type":"cylinder","center":..,"radius":..,"height":..,"axis":"y","color":"#hex","label":".."}
 - {"type":"sphere","center":..,"radius":..,"color":"#hex","label":".."}
 - {"type":"cone","center":..,"radius":..,"height":..,"axis":"y","color":"#hex"}
+- {"type":"torus","center":..,"radius":..,"tube":..,"color":"#hex","label":".."}
+- {"type":"plane","center":..,"size":[w,d],"color":"#hex","label":".."}
 - {"type":"arrow3d","from":[x,y,z],"to":[x,y,z],"color":"#hex"}
 - {"type":"label","at":[x,y,z],"text":".."}
 
 Rules:
 - Build the subject from simple parts: boxes, cylinders, spheres, cones,
-  arrows, labels. Compose them; do not attempt one complex mesh.
+  tori, planes, arrows, labels. Compose them; do not attempt one complex
+  mesh.
+- The JSON is plain data: never emit code, shaders, URLs, or file paths.
 - Use "3d" when the user asks for 3D, a model, or an object from all
   sides; otherwise "2d" for diagrams, flows, charts, and sketches.
 - Label the important parts. 4-12 items is usually right; max 20.
