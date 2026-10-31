@@ -93,10 +93,15 @@ def stream_scene(provider: LLMProvider, question: str, app: str,
 
 
 class GraphicsResult:
-    def __init__(self, speech: str, scene: Scene | None, raw: str) -> None:
+    def __init__(self, speech: str, scene: Scene | None, raw: str,
+                 suppress_tail: bool = False) -> None:
         self.speech = speech
         self.scene = scene
         self.raw = raw
+        # True when a scene was recovered WITHOUT the [SCENE] marker: the
+        # raw JSON then went through the speech filter and may be sitting
+        # in the caller's sentence buffer - do not speak the flushed tail.
+        self.suppress_tail = suppress_tail
 
 
 def run(provider: LLMProvider, question: str, app: str, memory: str,
@@ -126,4 +131,5 @@ def run(provider: LLMProvider, question: str, app: str, memory: str,
     scene = spec.from_dict(data) if data else None
     if scene is not None and not scene.items and not scene.title:
         scene = None                    # an empty object is not a visual
-    return GraphicsResult("".join(speech), scene, full)
+    suppress_tail = scene is not None and not filt.seen_marker
+    return GraphicsResult("".join(speech), scene, full, suppress_tail)
