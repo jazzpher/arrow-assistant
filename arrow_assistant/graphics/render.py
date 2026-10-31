@@ -11,7 +11,7 @@ from __future__ import annotations
 import math
 
 from PyQt6.QtCore import QPointF, QRectF, Qt
-from PyQt6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen, QPolygonF
+from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QPolygonF
 
 from . import geo3d
 from .spec import CANVAS, Scene
@@ -223,8 +223,7 @@ def project(point: geo3d.Vec, yaw: float, pitch: float, distance: float,
     x, y, z = geo3d.rotate(point, 0, yaw, 0)
     x, y, z = geo3d.rotate((x, y, z), pitch, 0, 0)
     z += distance
-    if z < 0.05:
-        z = 0.05
+    z = max(z, 0.05)
     f = distance / z
     return (cx + x * scale * f, cy - y * scale * f, z)
 
@@ -232,10 +231,11 @@ def project(point: geo3d.Vec, yaw: float, pitch: float, distance: float,
 def spread_labels(items: list[tuple[float, float, float, float]],
                   max_rounds: int = 40) -> list[tuple[float, float, float, float]]:
     """Greedy label de-overlap. items are (cx, cy, w, h); later entries are
-    shifted below/above their anchor until clear of everything placed."""
+    shifted below/above their anchor until clear of everything placed, with
+    horizontal nudges on later rounds when vertical space alone runs out."""
     placed: list[tuple[float, float, float, float]] = []
     for x, y, w_est, h_est in items:
-        y0 = y
+        x0, y0 = x, y
         for attempt in range(max_rounds):
             clash = any(abs(x - px) < (w_est + pw) / 2
                         and abs(y - py) < (h_est + ph) / 2
@@ -244,6 +244,10 @@ def spread_labels(items: list[tuple[float, float, float, float]],
                 break
             step = (attempt // 2 + 1) * h_est
             y = y0 + step if attempt % 2 == 0 else y0 - step
+            if attempt >= max_rounds // 2:       # vertical exhausted: sidestep
+                direction = 1 if attempt % 4 < 2 else -1
+                x = x0 + direction * ((attempt - max_rounds // 2) // 2 + 1) \
+                    * w_est * 0.45
         placed.append((x, y, w_est, h_est))
     return placed
 
@@ -284,7 +288,7 @@ def render_3d(p: QPainter, scene: Scene, w: float, h: float,
     for lb in labels:
         x, y, _ = project(tuple(lb["at"]), yaw, pitch, distance, cx, cy, scale)
         fs = max(10.0, min(30.0, lb.get("size", 24) * 0.55))
-        w_est = max(40.0, len(lb["text"]) * fs * 0.62)
+        w_est = max(40.0, len(lb["text"]) * fs * 0.72)
         pending.append((lb, fs, x, y, w_est, fs * 1.5))
     placed = spread_labels([(x, y, w_est, h_est)
                             for _, _, x, y, w_est, h_est in pending])
