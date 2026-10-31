@@ -23,7 +23,11 @@ from arrow_assistant.graphics import engine, geo3d, parse, render, spec, trigger
     "iguhit mo yung jet",
     "pakita mo kung paano gumagana yung engine",
     "gumawa ka ng larawan ng structure",
-    "render this molecule",
+    "can you render this molecule in 3d?",
+    "show me a chart of these numbers",
+    "make a graph of the data",
+    "render a chart for me",
+    "give me a visual of the process",
     "can I get a 3d view of the engine",
 ])
 def test_trigger_positive(q):
@@ -40,6 +44,20 @@ def test_trigger_positive(q):
     "   ",
 ])
 def test_trigger_negative(q):
+    assert not trigger.wants_graphics(q)
+
+
+# Weak nouns without a produce/show request stay on the pointing path -
+# an Excel question about charts must keep its POINT tags (regression).
+@pytest.mark.parametrize("q", [
+    "what chart type should I use for this data?",
+    "where is the chart button?",
+    "which graph shows the trend better in this Excel sheet?",
+    "how do I render this video in the editor?",
+    "can you map this drive?",
+    "how do I insert a chart in Excel?",
+])
+def test_trigger_weak_nouns_keep_teach_path(q):
     assert not trigger.wants_graphics(q)
 
 
@@ -136,6 +154,16 @@ def test_scene_filter_no_marker_flushes_all():
     out += f.flush()
     assert out == "just speech, no scene"
     assert f.spec_text() == ""
+
+
+def test_scene_filter_marker_is_case_insensitive():
+    f = parse.SceneFilter()
+    out = ""
+    for chunk in ["Sure, here ", "you go. [sce", "ne] {\"kind\": \"2d\", \"items\": []}"]:
+        out += f.feed(chunk)
+    out += f.flush()
+    assert out == "Sure, here you go. "
+    assert f.seen_marker
 
 
 def test_extract_spec_handles_fences_and_prose():
@@ -372,6 +400,42 @@ def test_engine_followup_carries_previous_scene(monkeypatch):
     assert "jet" in text_part
 
 
+def test_engine_markerless_scene_sets_suppress_tail(monkeypatch):
+    """No [SCENE] marker: the JSON went through the speech filter, so the
+    caller must NOT speak the flushed sentence-buffer tail (it is JSON)."""
+    fake = _FakeStream(["Here you go. ",
+                        "{\"kind\": \"2d\", \"title\": \"x\", "
+                        "\"items\": [{\"type\": \"rect\", \"x\":0,\"y\":0,\"w\":1,\"h\":1}]}"])
+    monkeypatch.setattr(engine.ai, "stream_parts", fake)
+    res = engine.run(_provider(), "draw a box", "app.exe", "", None, None,
+                     lambda t: None, threading.Event())
+    assert res.scene is not None          # scene still recovered
+    assert res.suppress_tail is True
+
+
+def test_engine_marked_scene_does_not_suppress(monkeypatch):
+    fake = _FakeStream(["Here. [SCENE] {\"kind\": \"2d\", \"title\": \"x\", "
+                        "\"items\": [{\"type\": \"rect\", \"x\":0,\"y\":0,\"w\":1,\"h\":1}]}"])
+    monkeypatch.setattr(engine.ai, "stream_parts", fake)
+    res = engine.run(_provider(), "draw a box", "app.exe", "", None, None,
+                     lambda t: None, threading.Event())
+    assert res.scene is not None
+    assert res.suppress_tail is False
+
+
+def test_render_spread_labels_separates_identical_anchors():
+    items = [(100.0, 50.0, 60.0, 15.0), (100.0, 50.0, 60.0, 15.0),
+             (100.0, 50.0, 60.0, 15.0)]
+    placed = render.spread_labels(items)
+    ys = [py for _, py, _, _ in placed]
+    assert len(set(ys)) == 3              # all three moved apart
+    for i, (x, y, w, h) in enumerate(placed):
+        for j, (x2, y2, w2, h2) in enumerate(placed):
+            if i < j:
+                assert not (abs(x - x2) < (w + w2) / 2
+                            and abs(y - y2) < (h + h2) / 2)
+
+
 def test_engine_cancel_stops_stream(monkeypatch):
     cancel = threading.Event()
     cancel.set()
@@ -467,6 +531,59 @@ def test_app_plain_question_stays_on_teach_path(monkeypatch):
     assert said == ["Nasa ribbon."]
 
 
+def test_app_graphics_cancel_stops_speaker_no_tail_no_memory(monkeypatch):
+    """Cancelled graphics run: audio cut, stream closed, no sentence-buffer
+    flush (a partial tail must not play late), no memory write, no scene."""
+    pytest.importorskip("PyQt6.QtWidgets")
+    from arrow_assistant import app as app_mod
+    a, said, _ = _fake_app(monkeypatch, app_mod)
+    scenes = []
+    a.show_scene = type("Sig", (), {"emit": lambda self, v: scenes.append(v)})()
+    calls = {"stop": 0, "finish": 0}
+
+    class Sp2:
+        def start(self): pass
+        def say(self, s): said.append(s)
+        def finish(self): calls["finish"] += 1
+        def stop(self): calls["stop"] += 1
+        def wait(self): pass
+
+    monkeypatch.setattr(app_mod, "Speaker", Sp2)
+
+    def cancelled_run(provider, question, app, mem, image_b64, prev, say, cancel):
+        cancel.set()
+        say("partial ans")                # no sentence boundary on purpose
+        return engine.GraphicsResult("partial ans", None, "raw")
+
+    monkeypatch.setattr(app_mod.gfx_engine, "run", cancelled_run)
+    a._pipeline(b"WAV", threading.Event())
+    assert calls["stop"] == 1 and calls["finish"] == 1
+    assert "partial ans" not in said      # buffered tail never spoken
+    assert not scenes
+    assert a.memory.rec is None           # cancelled run writes no memory
+    assert a._speaker is None
+
+
+def test_app_graphics_suppressed_tail_not_spoken(monkeypatch):
+    pytest.importorskip("PyQt6.QtWidgets")
+    from arrow_assistant import app as app_mod
+    a, said, _ = _fake_app(monkeypatch, app_mod)
+    a.show_scene = type("Sig", (), {"emit": lambda self, v: None})()
+    scene = spec.from_dict({"kind": "2d", "title": "x",
+                            "items": [{"type": "rect", "x": 0, "y": 0,
+                                       "w": 1, "h": 1}]})
+
+    def markerless(provider, question, app, mem, image_b64, prev, say, cancel):
+        say("Done. ")
+        return engine.GraphicsResult("Done. ", scene, "raw",
+                                     suppress_tail=True)
+
+    monkeypatch.setattr(app_mod.gfx_engine, "run", markerless)
+    a._pipeline(b"WAV", threading.Event())
+    assert said == ["Done."]              # sentence said, JSON tail not
+    assert a._gfx_scene is scene
+
+
 def test_app_graphics_failure_degrades_to_speech(monkeypatch):
     """A broken engine must not break teach: speech already played, no
     scene shown, error reported, no exception escapes."""
@@ -476,6 +593,17 @@ def test_app_graphics_failure_degrades_to_speech(monkeypatch):
     errors = []
     a.error = type("Sig", (), {"emit": lambda self, v: errors.append(v)})()
 
+    calls = {"finish": 0}
+
+    class Sp3:
+        def start(self): pass
+        def say(self, s): pass
+        def finish(self): calls["finish"] += 1
+        def stop(self): pass
+        def wait(self): pass
+
+    monkeypatch.setattr(app_mod, "Speaker", Sp3)
+
     def boom(*a, **k):
         raise RuntimeError("provider exploded")
 
@@ -483,3 +611,5 @@ def test_app_graphics_failure_degrades_to_speech(monkeypatch):
     a._pipeline(b"WAV", threading.Event())
     assert errors and "graphics error" in errors[0]
     assert a._gfx_scene is None
+    assert calls["finish"] == 1           # audio stream closed on exception
+    assert a._speaker is None
