@@ -20,6 +20,7 @@ from .agent.trigger import parse_agent_request
 from .errlog import log_diagnostic, log_error
 from .graphics import engine as gfx_engine
 from .graphics import trigger as gfx_trigger
+from .graphics.parse import strip_spec_json
 from .graphics.window import GraphicsWindow
 from .hotkey import HotkeyListener
 from .memory import Memory
@@ -318,10 +319,19 @@ class ArrowApp(QObject):
 
             result = gfx_engine.run(self.provider, question, app, mem,
                                     image_b64, self._gfx_scene, say, cancel)
-            for sentence in streamer.flush():
+            if cancel.is_set():
+                speaker.stop()          # cut audio; no tail, no memory write
+                return
+            # suppress_tail: a marker-less scene means raw JSON went into
+            # the sentence buffer - speak the tail minus the JSON, never
+            # the JSON itself.
+            tail_parts = streamer.flush()
+            if result.suppress_tail:
+                tail = strip_spec_json(" ".join(tail_parts))
+                tail_parts = [tail] if tail else []
+            for sentence in tail_parts:
                 speaker.say(sentence)
-            speaker.finish()
-            if result.scene is not None and not cancel.is_set():
+            if result.scene is not None:
                 log_diagnostic(
                     f"graphics: kind={result.scene.kind} "
                     f"items={len(result.scene.items)} "
@@ -339,6 +349,11 @@ class ArrowApp(QObject):
         except Exception as exc:  # a broken visual must never break teach
             self._report(f"graphics error: {exc}")
         finally:
+            if speaker is not None:
+                try:
+                    speaker.finish()    # close the audio stream on every path
+                except Exception as exc:
+                    print(f"[arrow] tts finish error: {exc}", file=sys.stderr)
             if speaker is not None and self._speaker is speaker:
                 self._speaker = None
 
