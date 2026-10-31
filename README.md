@@ -19,6 +19,13 @@ In teach mode (the default), Arrow never touches your mouse or keyboard. It show
 
 Extras on top of the basic loop:
 
+- **Real-time graphics.** Ask Arrow to draw: "draw the full jet in 3D and
+  explain the engines", "diagram how a tensor works", "iguhit mo yung
+  flow". A card pops up with a generated, labelled visual - 2D diagrams or
+  an interactive 3D sketch you can rotate and zoom - while the spoken
+  answer plays. Follow-ups update the same visual. See
+  [docs/GRAPHICS.md](docs/GRAPHICS.md).
+
 - **Per-app memory.** Arrow remembers your recent questions in each app (SQLite + a readable markdown tail in `Documents/Arrow Memory`), so follow-ups like "and then?" work.
 - **Knowledge folder.** Drop a markdown file with docs into `Documents/Arrow Wiki/<app>.exe.md` and Arrow becomes an expert in obscure or company-internal software the AI has never heard of.
 
