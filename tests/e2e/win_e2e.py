@@ -218,6 +218,69 @@ def check_overlay(qapp, target):
            tip_offset=tip_off, arrow_size=size, dpr=dpr)
 
 
+def check_graphics(qapp):
+    """The graphics card really appears on a real Windows desktop: show a
+    canned 2D + 3D scene, then pixel-check the bottom-right card region
+    against a screenshot taken before."""
+    from PyQt6.QtCore import QEventLoop, QTimer
+    from arrow_assistant.graphics import spec
+    from arrow_assistant.graphics.window import CARD_H, CARD_W, GraphicsWindow
+
+    def pump(ms):
+        loop = QEventLoop()
+        QTimer.singleShot(ms, loop.quit)
+        loop.exec()
+
+    scene2d = spec.from_dict({"kind": "2d", "title": "e2e card", "items": [
+        {"type": "rect", "x": 100, "y": 100, "w": 800, "h": 400,
+         "fill": "#2563eb", "label": "e2e"},
+        {"type": "line", "x1": 150, "y1": 700, "x2": 850, "y2": 700,
+         "arrow": True},
+    ]})
+    scene3d = spec.from_dict({"kind": "3d", "title": "e2e jet", "items": [
+        {"type": "cylinder", "height": 4, "rotate": [0, 0, 90]},
+        {"type": "arrow3d", "from": [0, -2, 0], "to": [0, -0.5, 0]},
+        {"type": "label", "at": [0, 1.5, 0], "text": "jet"},
+    ]})
+
+    mon_before, before = screenshot_primary("graphics_before.png")
+    win = GraphicsWindow()
+    win.show_scene(scene2d)
+    pump(1200)
+    card2d = win.grab().toImage()
+    card2d.save(str(OUT / "graphics_card_2d.png"))
+    mon, after2d = screenshot_primary("graphics_screen_2d.png")
+    win.show_scene(scene3d)
+    pump(1200)
+    win.grab().toImage().save(str(OUT / "graphics_card_3d.png"))
+    win.close_card()
+    pump(300)
+
+    ok_vis = win.isVisible() is False
+    # card region on the real screen: bottom-right, available geometry
+    geo = qapp.primaryScreen().availableGeometry()
+    left = geo.right() - CARD_W - 24 - mon["left"]
+    top = geo.bottom() - CARD_H - 24 - mon["top"]
+    box = (max(0, left), max(0, top),
+           min(after2d.width, left + CARD_W), min(after2d.height, top + CARD_H))
+    a = after2d.crop(box).convert("RGB")
+    b = before.crop(box).convert("RGB")
+    changed = sum(1 for px, q in zip(a.getdata(), b.getdata())
+                  if sum(abs(i - j) for i, j in zip(px, q)) > 60)
+    # the card is opaque: nearly every pixel in its rect should differ
+    need = (box[2] - box[0]) * (box[3] - box[1]) * 0.5
+    # 2D scene: the big blue rect must be present inside the card grab
+    px = card2d
+    blue = sum(1 for x in range(0, px.width(), 4) for y in range(0, px.height(), 4)
+               if (lambda c: abs(c[0] - 37) < 40 and abs(c[1] - 99) < 60
+                   and abs(c[2] - 235) < 60)(
+                   px.pixelColor(x, y).getRgb()[:3]))
+    ok = ok_vis and changed > need and blue > 500
+    record("graphics_card", ok,
+           f"changed_px={changed} need>{int(need)} blue_px_in_grab={blue} "
+           f"closed={ok_vis} box={box} mon={mon}")
+
+
 def check_tts():
     from arrow_assistant import tts
     text = "Kumusta! Click mo yung File menu para mag-open ng file."
@@ -535,6 +598,7 @@ def main() -> int:
         run_check("overlay_arrow", lambda: check_overlay(qapp, target))
     else:
         record("overlay_arrow", False, "no File menu element to aim at")
+    run_check("graphics_card", lambda: check_graphics(qapp))
     run_check("tts_edge_miniaudio", check_tts)
     if win and data:
         run_check("agent_dry_run", lambda: check_agent(win, data))
