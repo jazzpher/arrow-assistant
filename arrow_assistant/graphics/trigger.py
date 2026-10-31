@@ -1,19 +1,17 @@
 """Decide whether a teach-mode question is asking for a generated visual.
 
-Keyword-based and deterministic on purpose: routing must be testable and
-must never depend on the model deciding to draw on its own. English and
-Tagalog/Taglish phrasings are covered, mirroring the rest of the app.
+Two tiers, deterministic on purpose (routing must never depend on the
+model): STRONG patterns always route here; WEAK visual nouns (chart,
+graph, plot, visual) only route when the same utterance also asks for
+something to be made or shown - so "what chart type should I use in
+Excel?" or "where is the chart button?" keep the normal pointing path.
+English and Tagalog/Taglish, mirroring the rest of the app.
 """
 from __future__ import annotations
 
 import re
 
-# Whole-phrase patterns matched case-insensitively against the question.
-# Each is specific enough that normal teach questions ("where is the draw
-# toolbar?" is fine - it names an on-screen target and still matches; that
-# is acceptable: the user IS asking about drawing) route here only when a
-# visual artifact is being requested.
-_PATTERNS = [
+_STRONG = [
     r"\bdraw\b",
     r"\bsketch\b",
     r"\bdiagram\b",
@@ -22,23 +20,33 @@ _PATTERNS = [
     r"\bthree[- ]dimensional\b",
     r"\bvisuali[sz]e\b",
     r"\billustrat\w*\b",
-    r"\brender\b",
     r"\bblueprint\b",
     r"\bschematic\b",
-    r"\bgraph\b",
-    r"\bchart\b",
-    r"\bmap\s+out\b",
     r"\bshow\s+me\s+(what|how).*(look|work)",
     # Tagalog / Taglish
     r"\biguhit\b",
     r"\bguhit\b",
     r"\blarawan\b",
     r"\bdesenyo\b",
-    r"\bipakita\b.*\b(kung paano|hitsura)\b",
-    r"\bpakita\b.*\b(kung paano|hitsura)\b",
+    r"\b(ipakita|pakita)\b.*\b(kung paano|hitsura)\b",
 ]
 
-_RES = [re.compile(p, re.IGNORECASE) for p in _PATTERNS]
+# Nouns that also appear in ordinary teach questions about on-screen UI
+# ("where is the chart button", "what chart type fits this data").
+# "render" is deliberately NOT a weak noun: "how do I render this video?"
+# is an app question. It stays a request verb, so "render a chart" works.
+_WEAK_NOUN = re.compile(
+    r"\b(charts?|graphs?|plots?|visuals?)\b",
+    re.IGNORECASE)
+
+# ...so they count only when the user is asking for one to be produced.
+_REQUEST = re.compile(
+    r"\b(draw|make|create|show|give|generate|produce|build|plot|render|"
+    r"display|visuali[sz]e|gumawa|gawin|gawan|pakita|ipakita|iguhit|guhit|"
+    r"can you|could you|please|paki)\b",
+    re.IGNORECASE)
+
+_STRONG_RES = [re.compile(p, re.IGNORECASE) for p in _STRONG]
 
 _MAX_QUESTION_CHARS = 2000
 
@@ -49,4 +57,6 @@ def wants_graphics(question: str) -> bool:
     if not question:
         return False
     text = question[:_MAX_QUESTION_CHARS]
-    return any(r.search(text) for r in _RES)
+    if any(r.search(text) for r in _STRONG_RES):
+        return True
+    return bool(_WEAK_NOUN.search(text) and _REQUEST.search(text))
