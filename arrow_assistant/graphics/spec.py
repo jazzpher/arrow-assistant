@@ -85,6 +85,7 @@ class Scene:
     caption: str = ""
     background: str = DEFAULT_BG
     autorotate: bool = True           # 3D: gentle spin until the user drags
+    floor: bool = True                # 3D GPU: ground grid + axes
     items: list[Item] = field(default_factory=list)
     dropped: int = 0                  # items rejected during validation
 
@@ -95,12 +96,14 @@ class Scene:
             "caption": self.caption,
             "background": self.background,
             "autorotate": self.autorotate,
+            "floor": self.floor,
             "items": [{"type": it.kind, **it.data} for it in self.items],
         }
 
 
 _2D_KINDS = {"rect", "ellipse", "line", "poly", "text"}
-_3D_KINDS = {"box", "cylinder", "sphere", "cone", "arrow3d", "label"}
+_3D_KINDS = {"box", "cylinder", "sphere", "cone", "arrow3d", "label",
+             "torus", "plane"}
 
 
 def _canvas_pt(v) -> list[float] | None:
@@ -178,6 +181,27 @@ def _validate_3d(raw: dict) -> Item | None:
             return None
         return Item("arrow3d", {"from": a, "to": b,
                                 "color": color(raw.get("color"), "#f97316")})
+    if kind == "torus":
+        center = _world_pt(raw.get("center", [0, 0, 0])) or [0.0, 0.0, 0.0]
+        radius = num(raw.get("radius"), 1.0, 0.05, WORLD_LIMIT)
+        tube = num(raw.get("tube"), 0.3, 0.02, radius)
+        return Item("torus", {"center": center, "radius": radius,
+                              "tube": min(tube, radius),
+                              "segments": int(num(raw.get("segments"), 24,
+                                                  MIN_MESH_SEGMENTS,
+                                                  MAX_MESH_SEGMENTS)),
+                              "color": color(raw.get("color"), DEFAULT_FILL),
+                              "rotate": _vec(raw.get("rotate"), 3, 0.0,
+                                             -360.0, 360.0) or [0, 0, 0],
+                              "label": _text(raw.get("label"), MAX_TEXT_CHARS)})
+    if kind == "plane":
+        center = _world_pt(raw.get("center", [0, 0, 0])) or [0.0, 0.0, 0.0]
+        size = _vec(raw.get("size"), 2, 2.0, 0.05, WORLD_LIMIT) or [2.0, 2.0]
+        return Item("plane", {"center": center, "size": size,
+                              "color": color(raw.get("color"), DEFAULT_FILL),
+                              "rotate": _vec(raw.get("rotate"), 3, 0.0,
+                                             -360.0, 360.0) or [0, 0, 0],
+                              "label": _text(raw.get("label"), MAX_TEXT_CHARS)})
     if kind in ("box", "cylinder", "sphere", "cone"):
         center = _world_pt(raw.get("center", [0, 0, 0])) or [0.0, 0.0, 0.0]
         d: dict = {"center": center,
@@ -218,6 +242,7 @@ def from_dict(raw) -> Scene:
         caption=_text(raw.get("caption"), MAX_TEXT_CHARS),
         background=color(raw.get("background"), DEFAULT_BG),
         autorotate=bool(raw.get("autorotate", True)),
+        floor=bool(raw.get("floor", True)),
     )
     items = raw.get("items")
     if not isinstance(items, list):
