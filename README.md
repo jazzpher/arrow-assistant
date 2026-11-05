@@ -196,7 +196,7 @@ graph TD
     end
     subgraph Out [Output]
         TTS[edge-tts sentence prefetch]
-        OVL[PyQt6 click-through arrow overlay]
+        OVL[PyQt6 click-through cursor overlay]
     end
     USER --> STT & CAP & MEM & KB
     STT & CAP & MEM & KB --> LLM
@@ -204,12 +204,14 @@ graph TD
     LLM -->|POINT x y label| OVL
 ```
 
-On hotkey release, four things kick off in parallel: speech-to-text, screen capture, memory recall, and KB lookup. The vision model receives the screenshot plus transcript plus memory plus docs, and streams the answer. Sentences flush to TTS the moment a `.!?` boundary lands, so you start hearing the answer while the rest is still generating. A `[POINT:x,y:label]` tag in the reply drives the overlay arrow.
+On hotkey release, four things kick off in parallel: speech-to-text, screen capture, memory recall, and KB lookup. The vision model receives the screenshot plus transcript plus memory plus docs, and streams the answer. Sentences flush to TTS the moment a `.!?` boundary lands, so you start hearing the answer while the rest is still generating. A `[POINT:x,y:label]` tag in the reply sends a cursor flying to that spot, with the label in a bubble beside it.
 
 Notable details (credit to Clicky Windows for pioneering these):
 
 - **Observe-only hotkey.** `pynput.Listener(suppress=False)` watches keys without eating them, so your typing never breaks.
 - **Click-through overlay.** One transparent QWidget per physical monitor (mixed-DPI safe), made click-through with Win32 layered-window flags applied after `show()`.
+- **Flying cursor buddy.** Instead of popping up, a cursor flies from your mouse pointer to the target on a gentle arc, overshoots a hair and settles with a spring; the label rides along in a message bubble. Plain QPainter on a 60 fps timer that runs only while something moves (up to three cursors, staggered).
+- **Hidden from screen captures.** On Windows 10 2004 and later the overlay is excluded from captures (`SetWindowDisplayAffinity`, `WDA_EXCLUDEFROMCAPTURE`): you see it, but Arrow's own screenshots, screen shares and recordings do not. Set `ARROW_OVERLAY_IN_CAPTURE=1` to show it in captures (e.g. to record a demo). Older Windows is left alone, because there the flag would black the overlay out in captures.
 - **Prefetch double-buffer.** The next sentence's audio is synthesized while the current one is still playing, so gaps stay near zero.
 
 ## Pointing troubleshooting
@@ -218,6 +220,8 @@ The overlay is shown only when the model locates a visible target and emits
 `[POINT:x,y:label]`. It clears after six seconds; voice-only answers may have
 no target. Ask for a specific visible menu or word and watch during the reply.
 The app captures the monitor containing your mouse pointer.
+The overlay does not show up in screenshots or screen recordings on Windows 10
+2004+; to capture it, set `ARROW_OVERLAY_IN_CAPTURE=1`.
 
 Teach-mode metadata in `Documents/Arrow Memory/arrow.log` now records
 `teach points: parsed=... invalid=... incomplete=...` plus image size,
