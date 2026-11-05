@@ -200,7 +200,7 @@ def test_pipeline_streams_arrow_early_and_never_speaks_tag(monkeypatch):
     monkeypatch.setattr(app_mod.capture, "primary_shot",
                         lambda: (mon, Image.new("RGB", (1000, 500))))
     monkeypatch.setattr(app_mod.kb, "lookup", lambda app: None)
-    chunks = ["Click File. Then ", "pick Export. [ POI", "NT : 99999.3,20.2:Export]", " Done."]
+    chunks = ["Click File. Then ", "pick Export. [ POI", "NT : 1050.3,20.2:Export]", " Done."]
     monkeypatch.setattr(app_mod.ai, "stream_answer",
                         lambda *a, **k: iter(chunks))
     a.provider = object()
@@ -212,11 +212,11 @@ def test_pipeline_streams_arrow_early_and_never_speaks_tag(monkeypatch):
     diagnostics = []
     monkeypatch.setattr(app_mod, "log_diagnostic", diagnostics.append)
     a._pipeline(b"WAV", threading.Event())
-    assert diagnostics == ["teach points: parsed=1 invalid=0 incomplete=0 image=1000x500 monitor=0,0 scale=1.0000"]
+    assert diagnostics == ["teach points: parsed=1 rejected=0 invalid=0 incomplete=0 space=pixels image=1000x500 monitor=0,0 scale=1.0000"]
     assert all("POINT" not in s and "[" not in s for s in said)
     assert said == ["Click File.", "Then pick Export.", "Done."]
     assert len(shown) == 1 and shown[0][0].label == "Export"
-    assert shown[0][0].x == 999            # clamped inside the screenshot
+    assert shown[0][0].x == 999            # 5% past the edge: clamped inside the screenshot
     # the arrow is emitted mid-stream, before the last sentence is spoken
     assert order.index("arrow") < len(order) - 1
     assert "POINT" not in a.memory.rec[2]

@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtWidgets import QApplication
 
-from . import ai, capture, config, kb, setup_dialog, usage
+from . import ai, capture, config, kb, point_adapter, setup_dialog, usage
 from .agent.hotkeys import AgentHotkeys
 from .agent.stack import AgentStack
 from .agent.trigger import parse_agent_request
@@ -25,7 +25,7 @@ from .graphics.window import GraphicsWindow
 from .hotkey import HotkeyListener
 from .memory import Memory
 from .overlay import ArrowOverlay
-from .points import Point, SpeechFilter, to_image_px
+from .points import Point, SpeechFilter
 from .sentences import SentenceStreamer
 from .stt import MicRecorder, transcribe
 from .tray import Tray
@@ -243,7 +243,8 @@ class ArrowApp(QObject):
             shown: list[Point] = []
             s = capture.scale_factor(img, mon)
             enc_w, enc_h = capture.encoded_size(img)
-            space = ai.point_space(self.provider)
+            adapter = point_adapter.adapter_for(self.provider)
+            rejected = 0
 
             def say(text: str) -> None:
                 spoken.append(text)
@@ -261,16 +262,22 @@ class ArrowApp(QObject):
                     if text:
                         say(text)
                     if pts and not cancel.is_set():
-                        for p in pts:   # to (clamped) pixels of the image the model saw
-                            x, y = to_image_px(p.x, p.y, space, enc_w, enc_h)
-                            shown.append(Point(mon["left"] + round(x / s),
-                                               mon["top"] + round(y / s), p.label))
-                        # arrow appears while she is still talking
-                        self.show_points.emit(list(shown))
+                        added = False
+                        for p in pts:   # sanity-checked, clamped, to screen pixels
+                            sp = adapter.to_screen(p, enc_w, enc_h, mon, s)
+                            if sp is None:      # far off the screenshot: no arrow
+                                rejected += 1
+                                continue
+                            shown.append(sp)
+                            added = True
+                        if added:
+                            # arrow appears while she is still talking
+                            self.show_points.emit(list(shown))
                 tail = tags.flush()
                 log_diagnostic(
-                    f"teach points: parsed={len(shown)} invalid={tags.invalid_tags} "
-                    f"incomplete={tags.incomplete_tags} image={enc_w}x{enc_h} "
+                    f"teach points: parsed={len(shown)} rejected={rejected} "
+                    f"invalid={tags.invalid_tags} incomplete={tags.incomplete_tags} "
+                    f"space={adapter.space} image={enc_w}x{enc_h} "
                     f"monitor={mon['left']},{mon['top']} scale={s:.4f}")
                 if tail:
                     say(tail)
