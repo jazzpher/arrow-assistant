@@ -17,7 +17,7 @@ from collections.abc import Iterator
 
 import requests
 
-from . import usage
+from . import point_adapter, usage
 from .config import LLMProvider
 
 SYSTEM_PROMPT = """You are Arrow, a friendly screen-aware assistant on Windows.
@@ -66,8 +66,9 @@ assert GEMINI_SYSTEM_PROMPT != SYSTEM_PROMPT
 
 def point_space(provider: LLMProvider | None) -> str:
     """'norm1000' when POINT tags from this provider are on a 0-1000 grid,
-    else 'pixels' (screenshot pixels)."""
-    return "norm1000" if getattr(provider, "name", None) == "gemini" else "pixels"
+    else 'pixels' (screenshot pixels). One source of truth with the
+    adapter that maps them (point_adapter), env override included."""
+    return point_adapter.space_for(provider)
 
 
 def system_prompt(provider: LLMProvider | None) -> str:
