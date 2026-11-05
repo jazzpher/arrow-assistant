@@ -157,17 +157,27 @@ def check_overlay(qapp, target):
     cx, cy = target["center"]
     screens = [(s.name(), s.geometry().getRect(), s.devicePixelRatio()) for s in qapp.screens()]
     mon_before, before = screenshot_primary("overlay_before.png")
-    ov = ArrowOverlay(qapp)
-    ov.point_at([Point(cx, cy, "File menu")])
+    # The overlay normally hides itself from screen captures; this check
+    # needs to SEE it, so opt out (overlay_hidden_from_capture tests the default).
+    prev = os.environ.get("ARROW_OVERLAY_IN_CAPTURE")
+    os.environ["ARROW_OVERLAY_IN_CAPTURE"] = "1"
+    try:
+        ov = ArrowOverlay(qapp)
+        ov.point_at([Point(cx, cy, "File menu")])
 
-    def pump(ms):
-        loop = QEventLoop()
-        QTimer.singleShot(ms, loop.quit)
-        loop.exec()
-    pump(1500)
-    mon, after = screenshot_primary("overlay_arrow.png")
-    ov.clear()
-    pump(200)
+        def pump(ms):
+            loop = QEventLoop()
+            QTimer.singleShot(ms, loop.quit)
+            loop.exec()
+        pump(1500)   # the cursor flies in and settles in ~1.2 s at most
+        mon, after = screenshot_primary("overlay_arrow.png")
+        ov.clear()
+        pump(200)
+    finally:
+        if prev is None:
+            os.environ.pop("ARROW_OVERLAY_IN_CAPTURE", None)
+        else:
+            os.environ["ARROW_OVERLAY_IN_CAPTURE"] = prev
     # pixel check: the arrow body is drawn from the tip down/right (~25x40 px)
     lx, ly = cx - mon["left"], cy - mon["top"]
     box = (max(0, lx - 2), max(0, ly - 2), min(after.width, lx + 26), min(after.height, ly + 42))
@@ -216,6 +226,50 @@ def check_overlay(qapp, target):
            f"size_vs_dpr1={ratio} (expect ~{dpr}) screens={screens} mon={mon}",
            target=[cx, cy], blue_bbox=blue_bbox, arrow_bbox=arrow_bbox,
            tip_offset=tip_off, arrow_size=size, dpr=dpr)
+
+
+def check_overlay_hidden_from_capture(qapp, target):
+    """Default overlay (capture exclusion on): visible on the monitor, but
+    absent from Arrow's own screenshots (mss/BitBlt). Skipped when Windows
+    did not accept WDA_EXCLUDEFROMCAPTURE (build < 19041 or refused)."""
+    from PyQt6.QtCore import QEventLoop, QTimer
+    from arrow_assistant.overlay import ArrowOverlay
+    from arrow_assistant.points import Point
+    cx, cy = target["center"]
+    prev = os.environ.pop("ARROW_OVERLAY_IN_CAPTURE", None)
+    try:
+        mon_before, before = screenshot_primary("overlay_hidden_before.png")
+        ov = ArrowOverlay(qapp)
+        ov.point_at([Point(cx, cy, "File menu")])
+        loop = QEventLoop()
+        QTimer.singleShot(1500, loop.quit)
+        loop.exec()
+        excluded = [w.capture_excluded for w in ov._overlays if w.isVisible()]
+        mon, after = screenshot_primary("overlay_hidden.png")
+        ov.clear()
+    finally:
+        if prev is not None:
+            os.environ["ARROW_OVERLAY_IN_CAPTURE"] = prev
+    build = sys.getwindowsversion().build
+    if not any(excluded):
+        record("overlay_hidden_from_capture", None,
+               f"Windows did not accept WDA_EXCLUDEFROMCAPTURE (build={build}, "
+               f"excluded={excluded}); the overlay stays visible in captures there")
+        return
+    lx, ly = cx - mon["left"], cy - mon["top"]
+    a, b = after.convert("RGB").load(), before.convert("RGB").load()
+    W, H = after.size
+    new_blue = 0
+    for y in range(max(0, ly - 20), min(H, ly + 60)):
+        for x in range(max(0, lx - 20), min(W, lx + 50)):
+            r, g, bb = a[x, y]
+            q = b[x, y]
+            if (abs(r - 37) < 30 and abs(g - 99) < 30 and abs(bb - 235) < 30
+                    and abs(q[0] - r) + abs(q[1] - g) + abs(q[2] - bb) > 60):
+                new_blue += 1
+    record("overlay_hidden_from_capture", new_blue < 10,
+           f"build={build} excluded={excluded} new_arrow_blue_px_in_capture={new_blue} "
+           f"(expect ~0) target=({cx},{cy})")
 
 
 def check_graphics(qapp):
@@ -597,6 +651,8 @@ def main() -> int:
     target = find_el(data, "File") if data else None
     if target:
         run_check("overlay_arrow", lambda: check_overlay(qapp, target))
+        run_check("overlay_hidden_from_capture",
+                  lambda: check_overlay_hidden_from_capture(qapp, target))
     else:
         record("overlay_arrow", False, "no File menu element to aim at")
     run_check("graphics_card", lambda: check_graphics(qapp))
